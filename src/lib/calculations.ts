@@ -27,6 +27,7 @@ export interface BudgetGroup {
   amount: number;
   confirmedAmount: number;
   isDaily?: boolean; // flags rows built from a per-person/per-day rate, scaled by travellers × trip length
+  isProvisional?: boolean; // flags rows that include a not-yet-booked estimate
 }
 
 export interface BudgetSummary {
@@ -56,7 +57,8 @@ function isAccommodationConfirmed(status: Accommodation['status']): boolean {
 // accommodation → the accommodations table (real per-property cost/paid/status),
 // groceries/restaurants/coffee/alcohol → the meal-assumptions engine below.
 const EXPENSE_DRIVEN_GROUPS: Record<string, ExpenseCategory[]> = {
-  Transport: EXPENSE_CATEGORY_GROUPS.Transport,
+  Airfare: EXPENSE_CATEGORY_GROUPS.Airfare,
+  'Ground transport': EXPENSE_CATEGORY_GROUPS['Ground transport'],
   Activities: EXPENSE_CATEGORY_GROUPS.Activities,
   Miscellaneous: EXPENSE_CATEGORY_GROUPS.Miscellaneous,
 };
@@ -94,8 +96,8 @@ export function computeBudgetSummary(trip: TripData): BudgetSummary {
     ? `Includes the recommended "${recommendedScenario.scenario.name}" ground transport option (${formatCurrencyRaw(groundTransportEstimate)}), not yet booked.`
     : null;
 
-  const transportGroup = expenseGroups.find((g) => g.group === 'Transport')!;
-  transportGroup.amount += groundTransportEstimate;
+  const groundTransportGroup = expenseGroups.find((g) => g.group === 'Ground transport')!;
+  groundTransportGroup.amount += groundTransportEstimate;
 
   // Accommodation: sourced directly from the accommodations table, the actual
   // source of truth for what's been quoted/booked per property.
@@ -112,7 +114,8 @@ export function computeBudgetSummary(trip: TripData): BudgetSummary {
   const mealsAmount = computeMealBudget(trip, tripDurationDays(trip)).totalTrip;
 
   const byGroup: BudgetGroup[] = [
-    transportGroup,
+    expenseGroups.find((g) => g.group === 'Airfare')!,
+    { ...groundTransportGroup, isProvisional: groundTransportEstimate > 0 },
     { group: 'Accommodation', amount: accommodationAmount, confirmedAmount: accommodationConfirmed },
     { group: 'Meals', amount: mealsAmount, confirmedAmount: 0, isDaily: true },
     expenseGroups.find((g) => g.group === 'Activities')!,

@@ -48,7 +48,8 @@ export type ExpenseCategory =
   | 'incidentals';
 
 export const EXPENSE_CATEGORY_GROUPS: Record<string, ExpenseCategory[]> = {
-  Transport: ['flights', 'rail', 'bus', 'rental-car', 'fuel', 'parking', 'tolls'],
+  Airfare: ['flights'],
+  'Ground transport': ['rail', 'bus', 'rental-car', 'fuel', 'parking', 'tolls'],
   Accommodation: ['accommodation'],
   Meals: ['groceries', 'restaurants', 'coffee', 'alcohol'],
   Activities: ['activities', 'museum-tickets'],

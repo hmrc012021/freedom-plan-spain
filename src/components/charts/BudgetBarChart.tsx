@@ -1,12 +1,13 @@
 import { formatCurrency } from '@/lib/utils';
 
-const COLORS = ['#0F5257', '#E8A33D', '#A64E3B', '#1D7A80', '#CC8720'];
+const COLORS = ['#0F5257', '#E8A33D', '#A64E3B', '#1D7A80', '#CC8720', '#6B5B95'];
 
 interface GroupDatum {
   group: string;
   amount: number;
   confirmedAmount: number;
   isDaily?: boolean;
+  isProvisional?: boolean;
 }
 
 // Two bars per category: the full bar is estimated+confirmed, the bar below
@@ -44,6 +45,11 @@ export function BudgetBarChart({
                 {d.isDaily && (
                   <span className="rounded-full bg-amber-100 dark:bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-400">
                     daily estimate
+                  </span>
+                )}
+                {d.isProvisional && (
+                  <span className="rounded-full bg-brick-400/10 px-1.5 py-0.5 text-[10px] font-medium text-brick-500">
+                    not yet booked
                   </span>
                 )}
               </span>
