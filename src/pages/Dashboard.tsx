@@ -5,7 +5,7 @@ import { AppShell } from '@/components/layout/AppShell';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { StatCard } from '@/components/ui/StatCard';
 import { ProgressBar } from '@/components/ui/ProgressBar';
-import { BudgetPieChart, BudgetLegend } from '@/components/charts/BudgetPieChart';
+import { BudgetBarChart } from '@/components/charts/BudgetBarChart';
 import { DailySpendChart } from '@/components/charts/DailySpendChart';
 import { useTrip } from '@/store/useTripStore';
 import {
@@ -74,12 +74,7 @@ export default function Dashboard() {
             <CardTitle>Budget breakdown</CardTitle>
             <span className="font-mono-num text-xs text-slate">{summary.byGroup.length} categories</span>
           </CardHeader>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <BudgetPieChart data={summary.byGroup} currency={trip.currency} />
-            <div className="flex flex-col justify-center">
-              <BudgetLegend data={summary.byGroup} currency={trip.currency} />
-            </div>
-          </div>
+          <BudgetBarChart data={summary.byGroup} currency={trip.currency} />
         </Card>
 
         <div className="space-y-5">

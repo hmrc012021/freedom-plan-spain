@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { AppShell } from '@/components/layout/AppShell';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { StatusBadge } from '@/components/ui/Badge';
-import { BudgetPieChart, BudgetLegend } from '@/components/charts/BudgetPieChart';
+import { BudgetBarChart } from '@/components/charts/BudgetBarChart';
 import { useTripStore, useTrip } from '@/store/useTripStore';
 import { computeBudgetSummary, computeMealBudget, tripDurationDays, expenseTotal } from '@/lib/calculations';
 import { formatCurrency, formatCurrencyPrecise, uid } from '@/lib/utils';
@@ -173,10 +173,7 @@ export default function Budget() {
             <CardHeader>
               <CardTitle>By category</CardTitle>
             </CardHeader>
-            <BudgetPieChart data={summary.byGroup} currency={trip.currency} />
-            <div className="mt-3">
-              <BudgetLegend data={summary.byGroup} currency={trip.currency} />
-            </div>
+            <BudgetBarChart data={summary.byGroup} currency={trip.currency} />
           </Card>
         </div>
       </div>

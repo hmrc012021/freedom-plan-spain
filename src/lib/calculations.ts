@@ -32,7 +32,7 @@ export interface BudgetSummary {
   costPerTraveller: number;
   confirmedCostPerTraveller: number;
   byCategory: Record<ExpenseCategory, number>;
-  byGroup: { group: string; amount: number }[];
+  byGroup: { group: string; amount: number; confirmedAmount: number }[];
 }
 
 function isConfirmed(status: Expense['status']): boolean {
@@ -42,6 +42,7 @@ function isConfirmed(status: Expense['status']): boolean {
 export function computeBudgetSummary(trip: TripData): BudgetSummary {
   const travellerCount = trip.travellers.length || 1;
   const byCategory = {} as Record<ExpenseCategory, number>;
+  const confirmedByCategory = {} as Record<ExpenseCategory, number>;
 
   let totalTripCost = 0;
   let confirmedTripCost = 0;
@@ -53,7 +54,10 @@ export function computeBudgetSummary(trip: TripData): BudgetSummary {
     totalTripCost += amount;
     byCategory[exp.category] = (byCategory[exp.category] ?? 0) + amount;
     if (exp.status === 'paid') alreadyPaid += amount;
-    if (isConfirmed(exp.status)) confirmedTripCost += amount;
+    if (isConfirmed(exp.status)) {
+      confirmedTripCost += amount;
+      confirmedByCategory[exp.category] = (confirmedByCategory[exp.category] ?? 0) + amount;
+    }
   }
 
   // Fold in accommodation actuals that aren't mirrored in expenses precisely —
@@ -64,6 +68,7 @@ export function computeBudgetSummary(trip: TripData): BudgetSummary {
   const byGroup = Object.entries(EXPENSE_CATEGORY_GROUPS).map(([group, cats]) => ({
     group,
     amount: cats.reduce((sum, c) => sum + (byCategory[c] ?? 0), 0),
+    confirmedAmount: cats.reduce((sum, c) => sum + (confirmedByCategory[c] ?? 0), 0),
   }));
 
   return {
