@@ -208,15 +208,19 @@ export default function Budget() {
                     className="accent-petrol-500"
                   />
                   {m.label}
-                  <span className="text-[11px] text-slate">({m.frequency})</span>
                 </span>
-                <input
-                  type="number"
-                  value={m.costPerPerson}
-                  onChange={(e) => updateMealAssumption(m.id, { costPerPerson: Number(e.target.value) })}
-                  className="w-16 rounded-md border border-petrol-100 dark:border-dark-border bg-transparent px-1.5 py-0.5 text-right font-mono-num text-ink dark:text-paper-dim"
-                  step="0.5"
-                />
+                <span className="flex items-center gap-1.5">
+                  <input
+                    type="number"
+                    value={m.costPerPerson}
+                    onChange={(e) => updateMealAssumption(m.id, { costPerPerson: Number(e.target.value) })}
+                    className="w-16 rounded-md border border-petrol-100 dark:border-dark-border bg-transparent px-1.5 py-0.5 text-right font-mono-num text-ink dark:text-paper-dim"
+                    step="0.5"
+                  />
+                  <span className="whitespace-nowrap text-[11px] text-slate">
+                    per person{m.frequency === 'daily' ? ' / day' : ', ~every 3rd day'}
+                  </span>
+                </span>
               </label>
             ))}
           </div>
