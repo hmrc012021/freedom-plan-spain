@@ -24,11 +24,19 @@ export function isCounted(status: Expense['status']): boolean {
 
 export interface BudgetSummary {
   totalTripCost: number;
+  // "Confirmed" = paid, booked, or reserved — backed by an actual booking rather than a rough estimate.
+  confirmedTripCost: number;
   alreadyPaid: number;
   remaining: number;
+  remainingConfirmed: number;
   costPerTraveller: number;
+  confirmedCostPerTraveller: number;
   byCategory: Record<ExpenseCategory, number>;
   byGroup: { group: string; amount: number }[];
+}
+
+function isConfirmed(status: Expense['status']): boolean {
+  return status === 'paid' || status === 'booked' || status === 'reserved';
 }
 
 export function computeBudgetSummary(trip: TripData): BudgetSummary {
@@ -36,6 +44,7 @@ export function computeBudgetSummary(trip: TripData): BudgetSummary {
   const byCategory = {} as Record<ExpenseCategory, number>;
 
   let totalTripCost = 0;
+  let confirmedTripCost = 0;
   let alreadyPaid = 0;
 
   for (const exp of trip.expenses) {
@@ -44,11 +53,13 @@ export function computeBudgetSummary(trip: TripData): BudgetSummary {
     totalTripCost += amount;
     byCategory[exp.category] = (byCategory[exp.category] ?? 0) + amount;
     if (exp.status === 'paid') alreadyPaid += amount;
+    if (isConfirmed(exp.status)) confirmedTripCost += amount;
   }
 
   // Fold in accommodation actuals that aren't mirrored in expenses precisely —
   // accommodations are the source of truth for paid/cost, expenses track the rest.
   const remaining = Math.max(totalTripCost - alreadyPaid, 0);
+  const remainingConfirmed = Math.max(confirmedTripCost - alreadyPaid, 0);
 
   const byGroup = Object.entries(EXPENSE_CATEGORY_GROUPS).map(([group, cats]) => ({
     group,
@@ -57,9 +68,12 @@ export function computeBudgetSummary(trip: TripData): BudgetSummary {
 
   return {
     totalTripCost,
+    confirmedTripCost,
     alreadyPaid,
     remaining,
+    remainingConfirmed,
     costPerTraveller: totalTripCost / travellerCount,
+    confirmedCostPerTraveller: confirmedTripCost / travellerCount,
     byCategory,
     byGroup,
   };
@@ -72,9 +86,10 @@ export function tripDurationDays(trip: TripData): number {
   );
 }
 
-export function expectedDailySpend(trip: TripData): number {
-  const { totalTripCost } = computeBudgetSummary(trip);
-  return totalTripCost / tripDurationDays(trip);
+export function expectedDailySpend(trip: TripData): { total: number; confirmed: number } {
+  const { totalTripCost, confirmedTripCost } = computeBudgetSummary(trip);
+  const days = tripDurationDays(trip);
+  return { total: totalTripCost / days, confirmed: confirmedTripCost / days };
 }
 
 export function daysUntilDeparture(trip: TripData): number {

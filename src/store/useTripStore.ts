@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type {
   TripData, Accommodation, Expense, Activity, Booking, TransportScenario,
-  PackingItem, MealAssumption, TripSettings,
+  PackingItem, MealAssumption, TripSettings, ItineraryDay,
 } from '@/types/trip';
 import { TRIP_ID } from '@/lib/supabaseClient';
 import * as repo from '@/lib/tripRepository';
@@ -24,9 +24,18 @@ interface TripStore {
 
   updateActivity: (id: string, patch: Partial<Activity>) => void;
   addActivity: (act: Activity) => void;
+  removeActivity: (id: string) => void;
 
   updateBooking: (id: string, patch: Partial<Booking>) => void;
   addBooking: (booking: Booking) => void;
+  removeBooking: (id: string) => void;
+
+  addItineraryDay: (day: { date: string; city: string; notes?: string }) => void;
+  updateItineraryDay: (
+    id: string,
+    patch: { date?: string; city?: string; notes?: string; accommodationId?: string | null },
+  ) => void;
+  removeItineraryDay: (id: string) => void;
 
   updateScenario: (id: string, patch: Partial<TransportScenario>) => void;
 
@@ -131,8 +140,23 @@ export const useTripStore = create<TripStore>()((set, get) => ({
     const trip = get().trip;
     if (!trip) return;
     set({ trip: { ...trip, activities: [...trip.activities, act] } });
-    void repo.insertActivity(trip.id, act);
+    // activities.id is a real Postgres uuid; act.id here is a client-side
+    // placeholder, so swap in the DB-generated id once the insert resolves
+    // (same reconciliation as addBooking below).
+    void repo.insertActivity(trip.id, act).then((realId) => {
+      if (!realId) return;
+      const t = get().trip;
+      if (!t) return;
+      set({ trip: { ...t, activities: t.activities.map((a) => (a.id === act.id ? { ...a, id: realId } : a)) } });
+    });
     get().logEdit(`Added activity: ${act.name}`);
+  },
+
+  removeActivity: (id) => {
+    const trip = get().trip;
+    if (!trip) return;
+    set({ trip: { ...trip, activities: trip.activities.filter((a) => a.id !== id) } });
+    void repo.deleteActivity(trip.id, id);
   },
 
   updateBooking: (id, patch) => {
@@ -153,6 +177,50 @@ export const useTripStore = create<TripStore>()((set, get) => ({
       set({ trip: { ...t, bookings: t.bookings.map((b) => (b.id === booking.id ? { ...b, id: realId } : b)) } });
     });
     get().logEdit(`Added booking: ${booking.label}`);
+  },
+
+  removeBooking: (id) => {
+    const trip = get().trip;
+    if (!trip) return;
+    set({ trip: { ...trip, bookings: trip.bookings.filter((b) => b.id !== id) } });
+    void repo.deleteBooking(trip.id, id);
+  },
+
+  addItineraryDay: (day) => {
+    const trip = get().trip;
+    if (!trip) return;
+    const tempId = uid('day');
+    const newDay: ItineraryDay = { id: tempId, date: day.date, city: day.city, notes: day.notes, transportLegIds: [], activityIds: [] };
+    set({ trip: { ...trip, itineraryDays: [...trip.itineraryDays, newDay].sort((a, b) => a.date.localeCompare(b.date)) } });
+    void repo.insertItineraryDay(trip.id, day).then((realId) => {
+      if (!realId) return;
+      const t = get().trip;
+      if (!t) return;
+      set({ trip: { ...t, itineraryDays: t.itineraryDays.map((d) => (d.id === tempId ? { ...d, id: realId } : d)) } });
+    });
+    get().logEdit(`Added itinerary day: ${day.city} (${day.date})`);
+  },
+
+  updateItineraryDay: (id, patch) => {
+    const trip = get().trip;
+    if (!trip) return;
+    set({
+      trip: {
+        ...trip,
+        itineraryDays: trip.itineraryDays
+          .map((d) => (d.id === id ? { ...d, ...patch, accommodationId: patch.accommodationId ?? d.accommodationId } : d))
+          .sort((a, b) => a.date.localeCompare(b.date)),
+      },
+    });
+    void repo.updateItineraryDay(trip.id, id, patch);
+    get().logEdit('Updated itinerary day');
+  },
+
+  removeItineraryDay: (id) => {
+    const trip = get().trip;
+    if (!trip) return;
+    set({ trip: { ...trip, itineraryDays: trip.itineraryDays.filter((d) => d.id !== id) } });
+    void repo.deleteItineraryDay(trip.id, id);
   },
 
   updateScenario: (id, patch) => {

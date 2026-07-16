@@ -4,7 +4,7 @@ import type { TripData } from '@/types/trip';
 import { expectedDailySpend } from '@/lib/calculations';
 
 export function DailySpendChart({ trip }: { trip: TripData }) {
-  const daily = expectedDailySpend(trip);
+  const daily = expectedDailySpend(trip).total;
 
   const data = trip.itineraryDays.map((d) => {
     // Days with check-ins/activities spike slightly above the flat baseline for visual signal.

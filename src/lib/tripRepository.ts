@@ -89,7 +89,7 @@ export async function fetchTrip(tripId: string): Promise<TripData> {
   }));
 
   const itineraryDays: ItineraryDay[] = (daysRes.data ?? []).map((d) => ({
-    date: d.date, city: d.city, accommodationId: d.accommodation_id ?? undefined, notes: d.notes ?? undefined,
+    id: d.id, date: d.date, city: d.city, accommodationId: d.accommodation_id ?? undefined, notes: d.notes ?? undefined,
     transportLegIds: (dayLegsRes.data ?? []).filter((x) => x.day_id === d.id).map((x) => x.leg_id),
     activityIds: (dayActsRes.data ?? []).filter((x) => x.day_id === d.id).map((x) => x.activity_id),
     checklist: (checklistRes.data ?? []).filter((c) => c.day_id === d.id).map((c) => ({ id: c.id, label: c.label, done: c.done })),
@@ -197,17 +197,41 @@ export async function deleteExpense(tripId: string, id: string) {
 export async function upsertActivity(tripId: string, act: Partial<Activity> & { id: string }) {
   const patch: Record<string, unknown> = {};
   if (act.name !== undefined) patch.name = act.name;
+  if (act.city !== undefined) patch.city = act.city;
+  if (act.date !== undefined) patch.activity_date = act.date;
+  if (act.time !== undefined) patch.activity_time = act.time;
   if (act.status !== undefined) patch.status = act.status;
+  if (act.costAdult !== undefined) patch.cost_adult = act.costAdult;
+  if (act.costYouth !== undefined) patch.cost_youth = act.costYouth;
+  if (act.costSenior !== undefined) patch.cost_senior = act.costSenior;
+  if (act.totalCost !== undefined) patch.total_cost = act.totalCost;
   if (act.paid !== undefined) patch.paid = act.paid;
+  if (act.hasSeniorDiscount !== undefined) patch.has_senior_discount = act.hasSeniorDiscount;
+  if (act.hasYouthDiscount !== undefined) patch.has_youth_discount = act.hasYouthDiscount;
+  if (act.notes !== undefined) patch.notes = act.notes;
   const { error } = await supabase.from('activities').update(patch as never).eq('id', act.id).eq('trip_id', tripId);
   await logWriteError('upsertActivity', error);
 }
 
 export async function insertActivity(tripId: string, act: Activity) {
-  const { error } = await supabase.from('activities').insert({
-    id: act.id, trip_id: tripId, name: act.name, city: act.city, status: act.status, paid: act.paid,
-  });
+  // activities.id is `uuid default gen_random_uuid()`, unlike act.id (a client-side
+  // `uid('act')` string, not a valid uuid) -- let Postgres generate the real id and
+  // hand it back so the caller can reconcile local state, matching insertBooking.
+  // (Previously this passed the fake id straight through, which silently failed
+  // every insert -- new activities appeared in the UI but were never persisted.)
+  const { data, error } = await supabase.from('activities').insert({
+    trip_id: tripId, name: act.name, city: act.city, status: act.status, paid: act.paid,
+    activity_date: act.date ?? null, activity_time: act.time ?? null,
+    cost_adult: act.costAdult ?? null, cost_youth: act.costYouth ?? null, cost_senior: act.costSenior ?? null,
+    total_cost: act.totalCost ?? null, notes: act.notes ?? null,
+  }).select('id').single();
   await logWriteError('insertActivity', error);
+  return data?.id as string | undefined;
+}
+
+export async function deleteActivity(tripId: string, id: string) {
+  const { error } = await supabase.from('activities').delete().eq('id', id).eq('trip_id', tripId);
+  await logWriteError('deleteActivity', error);
 }
 
 export async function insertBooking(tripId: string, booking: Booking) {
@@ -227,11 +251,53 @@ export async function upsertBooking(tripId: string, id: string, patch: Partial<B
   const dbPatch: Record<string, unknown> = {};
   if (patch.status !== undefined) dbPatch.status = patch.status;
   if (patch.cost !== undefined) dbPatch.cost = patch.cost;
+  if (patch.paidAmount !== undefined) dbPatch.paid_amount = patch.paidAmount;
   if (patch.label !== undefined) dbPatch.label = patch.label;
+  if (patch.category !== undefined) dbPatch.category = patch.category;
   if (patch.date !== undefined) dbPatch.booking_date = patch.date;
   if (patch.confirmationNumber !== undefined) dbPatch.confirmation_number = patch.confirmationNumber;
   const { error } = await supabase.from('bookings').update(dbPatch as never).eq('id', id).eq('trip_id', tripId);
   await logWriteError('upsertBooking', error);
+}
+
+export async function deleteBooking(tripId: string, id: string) {
+  const { error } = await supabase.from('bookings').delete().eq('id', id).eq('trip_id', tripId);
+  await logWriteError('deleteBooking', error);
+}
+
+// ---------------------------------------------------------------------------
+// Itinerary days -- full CRUD. day_id foreign keys (transport legs, activities,
+// checklist items) all cascade-delete, so removing a day is a single delete.
+// ---------------------------------------------------------------------------
+
+export async function insertItineraryDay(
+  tripId: string,
+  day: { date: string; city: string; notes?: string },
+): Promise<string | undefined> {
+  const { data, error } = await supabase.from('itinerary_days').insert({
+    trip_id: tripId, date: day.date, city: day.city, notes: day.notes ?? null,
+  }).select('id').single();
+  await logWriteError('insertItineraryDay', error);
+  return data?.id as string | undefined;
+}
+
+export async function updateItineraryDay(
+  tripId: string,
+  id: string,
+  patch: { date?: string; city?: string; notes?: string; accommodationId?: string | null },
+) {
+  const dbPatch: Record<string, unknown> = {};
+  if (patch.date !== undefined) dbPatch.date = patch.date;
+  if (patch.city !== undefined) dbPatch.city = patch.city;
+  if (patch.notes !== undefined) dbPatch.notes = patch.notes;
+  if (patch.accommodationId !== undefined) dbPatch.accommodation_id = patch.accommodationId;
+  const { error } = await supabase.from('itinerary_days').update(dbPatch as never).eq('id', id).eq('trip_id', tripId);
+  await logWriteError('updateItineraryDay', error);
+}
+
+export async function deleteItineraryDay(tripId: string, id: string) {
+  const { error } = await supabase.from('itinerary_days').delete().eq('id', id).eq('trip_id', tripId);
+  await logWriteError('deleteItineraryDay', error);
 }
 
 export async function updateScenarioLineItems(scenarioId: string, lineItems: { label: string; amount: number }[]) {

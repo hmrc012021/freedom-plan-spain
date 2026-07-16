@@ -187,6 +187,7 @@ export interface ItineraryStop {
 }
 
 export interface ItineraryDay {
+  id: string;
   date: string; // ISO date
   city: string;
   accommodationId?: string;

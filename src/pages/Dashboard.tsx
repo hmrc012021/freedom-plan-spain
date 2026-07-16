@@ -31,12 +31,41 @@ export default function Dashboard() {
   return (
     <AppShell title="Dashboard">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
-        <StatCard label="Total trip cost" value={formatCurrency(summary.totalTripCost, trip.currency)} tone="petrol" delay={0} />
+        <StatCard
+          label="Total trip cost"
+          value={formatCurrency(summary.totalTripCost, trip.currency)}
+          confirmedValue={formatCurrency(summary.confirmedTripCost, trip.currency)}
+          confirmedPct={summary.totalTripCost > 0 ? (summary.confirmedTripCost / summary.totalTripCost) * 100 : 0}
+          tone="petrol"
+          delay={0}
+        />
         <StatCard label="Already paid" value={formatCurrency(summary.alreadyPaid, trip.currency)} tone="petrol" delay={0.03} />
-        <StatCard label="Remaining" value={formatCurrency(summary.remaining, trip.currency)} tone="amber" delay={0.06} />
-        <StatCard label="Daily spend" value={formatCurrency(dailySpend, trip.currency)} sublabel="expected / day" tone="petrol" delay={0.09} />
-        <StatCard label="Per traveller" value={formatCurrency(summary.costPerTraveller, trip.currency)} tone="brick" delay={0.12} />
-        <StatCard label="Departure" value={days >= 0 ? `T-${days}` : 'Underway'} sublabel={formatDateFull(trip.departureDate)} tone="petrol" delay={0.15} />
+        <StatCard
+          label="Remaining"
+          value={formatCurrency(summary.remaining, trip.currency)}
+          confirmedValue={formatCurrency(summary.remainingConfirmed, trip.currency)}
+          confirmedPct={summary.remaining > 0 ? (summary.remainingConfirmed / summary.remaining) * 100 : 0}
+          tone="amber"
+          delay={0.06}
+        />
+        <StatCard
+          label="Daily spend"
+          value={formatCurrency(dailySpend.total, trip.currency)}
+          sublabel="expected / day"
+          confirmedValue={formatCurrency(dailySpend.confirmed, trip.currency)}
+          confirmedPct={dailySpend.total > 0 ? (dailySpend.confirmed / dailySpend.total) * 100 : 0}
+          tone="petrol"
+          delay={0.09}
+        />
+        <StatCard
+          label="Per traveller"
+          value={formatCurrency(summary.costPerTraveller, trip.currency)}
+          confirmedValue={formatCurrency(summary.confirmedCostPerTraveller, trip.currency)}
+          confirmedPct={summary.costPerTraveller > 0 ? (summary.confirmedCostPerTraveller / summary.costPerTraveller) * 100 : 0}
+          tone="brick"
+          delay={0.12}
+        />
+        <StatCard label="Departure" value={days >= 0 ? `Day -${days}` : 'Underway'} sublabel={formatDateFull(trip.departureDate)} tone="petrol" delay={0.15} />
       </div>
 
       <div className="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-3">

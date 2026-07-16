@@ -8,6 +8,10 @@ interface StatCardProps {
   icon?: ReactNode;
   tone?: 'petrol' | 'amber' | 'brick' | 'neutral';
   delay?: number;
+  // Optional confirmed-vs-estimated split: confirmedValue is the portion of `value`
+  // that's backed by an actual booking/payment rather than a rough estimate.
+  confirmedValue?: string;
+  confirmedPct?: number; // 0-100
 }
 
 const trimVar: Record<NonNullable<StatCardProps['tone']>, string> = {
@@ -17,7 +21,16 @@ const trimVar: Record<NonNullable<StatCardProps['tone']>, string> = {
   neutral: 'var(--color-slate)',
 };
 
-export function StatCard({ label, value, sublabel, icon, tone = 'petrol', delay = 0 }: StatCardProps) {
+export function StatCard({
+  label,
+  value,
+  sublabel,
+  icon,
+  tone = 'petrol',
+  delay = 0,
+  confirmedValue,
+  confirmedPct,
+}: StatCardProps) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }}
@@ -33,6 +46,19 @@ export function StatCard({ label, value, sublabel, icon, tone = 'petrol', delay 
       <div>
         <div className="font-mono-num text-3xl font-semibold leading-none">{value}</div>
         {sublabel && <div className="mt-1.5 text-xs opacity-60">{sublabel}</div>}
+        {confirmedValue !== undefined && confirmedPct !== undefined && (
+          <div className="mt-2.5">
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
+              <div
+                className="h-full rounded-full"
+                style={{ width: `${Math.min(Math.max(confirmedPct, 0), 100)}%`, backgroundColor: trimVar[tone] }}
+              />
+            </div>
+            <div className="mt-1 text-[11px] opacity-70">
+              <span className="font-mono-num font-medium" style={{ color: trimVar[tone] }}>{confirmedValue}</span> confirmed
+            </div>
+          </div>
+        )}
       </div>
     </motion.div>
   );
