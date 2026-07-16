@@ -19,7 +19,14 @@ export default function Activities() {
   const [showAddForm, setShowAddForm] = useState(false);
 
   const cities = [...new Set(trip.activities.map((a) => a.city))];
-  const filtered = trip.activities.filter((a) => cityFilter === 'all' || a.city === cityFilter);
+  const filtered = trip.activities
+    .filter((a) => cityFilter === 'all' || a.city === cityFilter)
+    .sort((a, b) => {
+      if (!a.date && !b.date) return 0;
+      if (!a.date) return 1; // undated activities sort last
+      if (!b.date) return -1;
+      return a.date.localeCompare(b.date) || (a.time ?? '').localeCompare(b.time ?? '');
+    });
 
   return (
     <AppShell title="Activities">

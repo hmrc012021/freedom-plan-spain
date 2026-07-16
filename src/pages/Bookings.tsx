@@ -43,6 +43,14 @@ export default function Bookings() {
       groups[b.category] = groups[b.category] ?? [];
       groups[b.category].push(b);
     }
+    for (const category of Object.keys(groups)) {
+      groups[category].sort((a, b) => {
+        if (!a.date && !b.date) return 0;
+        if (!a.date) return 1; // undated bookings sort last
+        if (!b.date) return -1;
+        return a.date.localeCompare(b.date);
+      });
+    }
     return groups;
   }, [trip.bookings]);
 
