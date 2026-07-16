@@ -10,9 +10,12 @@ import { exportBudgetCSV } from '@/lib/exportImport';
 import type { Expense, ExpenseCategory, PaymentStatus, RefundPolicy } from '@/types/trip';
 import { Download, Plus, Trash2 } from 'lucide-react';
 
+// Accommodation and meal categories (groceries/restaurants/coffee/alcohol) are
+// deliberately excluded — those are sourced from the Accommodation page and the
+// meal-budget estimator below instead, to avoid two disconnected numbers for the
+// same cost. Add accommodation costs there; add meal assumptions in the card below.
 const CATEGORIES: ExpenseCategory[] = [
   'flights', 'rail', 'bus', 'rental-car', 'fuel', 'parking', 'tolls',
-  'accommodation', 'groceries', 'restaurants', 'coffee', 'alcohol',
   'activities', 'museum-tickets', 'shopping', 'laundry', 'pharmacy',
   'mobile-data', 'insurance', 'incidentals',
 ];
@@ -173,7 +176,14 @@ export default function Budget() {
             <CardHeader>
               <CardTitle>By category</CardTitle>
             </CardHeader>
-            <BudgetBarChart data={summary.byGroup} currency={trip.currency} />
+            <BudgetBarChart
+              data={summary.byGroup}
+              currency={trip.currency}
+              notes={[
+                summary.groundTransportNote,
+                `Meals reflect the daily assumptions below, scaled for ${trip.travellers.length} travellers × ${tripDurationDays(trip)} days.`,
+              ]}
+            />
           </Card>
         </div>
       </div>

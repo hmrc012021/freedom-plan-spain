@@ -14,6 +14,7 @@ import {
   expectedDailySpend,
   bookingCompletionPct,
   tripProgressPct,
+  tripDurationDays,
   nextAction,
 } from '@/lib/calculations';
 import { formatCurrency, formatDateFull } from '@/lib/utils';
@@ -74,7 +75,14 @@ export default function Dashboard() {
             <CardTitle>Budget breakdown</CardTitle>
             <span className="font-mono-num text-xs text-slate">{summary.byGroup.length} categories</span>
           </CardHeader>
-          <BudgetBarChart data={summary.byGroup} currency={trip.currency} />
+          <BudgetBarChart
+            data={summary.byGroup}
+            currency={trip.currency}
+            notes={[
+              summary.groundTransportNote,
+              `Meals reflect the daily assumptions on the Budget page, scaled for ${trip.travellers.length} travellers × ${tripDurationDays(trip)} days.`,
+            ]}
+          />
         </Card>
 
         <div className="space-y-5">

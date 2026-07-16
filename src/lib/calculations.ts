@@ -22,6 +22,13 @@ export function isCounted(status: Expense['status']): boolean {
   return status !== 'cancelled';
 }
 
+export interface BudgetGroup {
+  group: string;
+  amount: number;
+  confirmedAmount: number;
+  isDaily?: boolean; // flags rows built from a per-person/per-day rate, scaled by travellers × trip length
+}
+
 export interface BudgetSummary {
   totalTripCost: number;
   // "Confirmed" = paid, booked, or reserved — backed by an actual booking rather than a rough estimate.
@@ -32,44 +39,92 @@ export interface BudgetSummary {
   costPerTraveller: number;
   confirmedCostPerTraveller: number;
   byCategory: Record<ExpenseCategory, number>;
-  byGroup: { group: string; amount: number; confirmedAmount: number }[];
+  byGroup: BudgetGroup[];
+  groundTransportNote: string | null;
 }
 
 function isConfirmed(status: Expense['status']): boolean {
   return status === 'paid' || status === 'booked' || status === 'reserved';
 }
 
+function isAccommodationConfirmed(status: Accommodation['status']): boolean {
+  return status === 'paid' || status === 'booked' || status === 'reserved';
+}
+
+// Categories now sourced from their own dedicated tables/engines rather than
+// freeform expense rows, so they're excluded here to avoid double-counting:
+// accommodation → the accommodations table (real per-property cost/paid/status),
+// groceries/restaurants/coffee/alcohol → the meal-assumptions engine below.
+const EXPENSE_DRIVEN_GROUPS: Record<string, ExpenseCategory[]> = {
+  Transport: EXPENSE_CATEGORY_GROUPS.Transport,
+  Activities: EXPENSE_CATEGORY_GROUPS.Activities,
+  Miscellaneous: EXPENSE_CATEGORY_GROUPS.Miscellaneous,
+};
+
 export function computeBudgetSummary(trip: TripData): BudgetSummary {
   const travellerCount = trip.travellers.length || 1;
   const byCategory = {} as Record<ExpenseCategory, number>;
   const confirmedByCategory = {} as Record<ExpenseCategory, number>;
 
-  let totalTripCost = 0;
-  let confirmedTripCost = 0;
-  let alreadyPaid = 0;
+  let expensePaid = 0;
 
   for (const exp of trip.expenses) {
     if (!isCounted(exp.status)) continue;
     const amount = expenseTotal(exp, travellerCount);
-    totalTripCost += amount;
     byCategory[exp.category] = (byCategory[exp.category] ?? 0) + amount;
-    if (exp.status === 'paid') alreadyPaid += amount;
+    if (exp.status === 'paid') expensePaid += amount;
     if (isConfirmed(exp.status)) {
-      confirmedTripCost += amount;
       confirmedByCategory[exp.category] = (confirmedByCategory[exp.category] ?? 0) + amount;
     }
   }
 
-  // Fold in accommodation actuals that aren't mirrored in expenses precisely —
-  // accommodations are the source of truth for paid/cost, expenses track the rest.
-  const remaining = Math.max(totalTripCost - alreadyPaid, 0);
-  const remainingConfirmed = Math.max(confirmedTripCost - alreadyPaid, 0);
-
-  const byGroup = Object.entries(EXPENSE_CATEGORY_GROUPS).map(([group, cats]) => ({
+  const expenseGroups = Object.entries(EXPENSE_DRIVEN_GROUPS).map(([group, cats]) => ({
     group,
     amount: cats.reduce((sum, c) => sum + (byCategory[c] ?? 0), 0),
     confirmedAmount: cats.reduce((sum, c) => sum + (confirmedByCategory[c] ?? 0), 0),
   }));
+
+  // Ground transport is a decision the traveller hasn't locked in yet — fold the
+  // recommended (cheapest) scenario in as a provisional, unconfirmed estimate so
+  // it actually shows up in the budget instead of living only on the Transport page.
+  const scenarioRec = recommendTransportScenario(trip.transportScenarios, travellerCount);
+  const recommendedScenario = scenarioRec.results.find((r) => r.scenario.id === scenarioRec.recommendedId);
+  const groundTransportEstimate = recommendedScenario?.total ?? 0;
+  const groundTransportNote = recommendedScenario
+    ? `Includes the recommended "${recommendedScenario.scenario.name}" ground transport option (${formatCurrencyRaw(groundTransportEstimate)}), not yet booked.`
+    : null;
+
+  const transportGroup = expenseGroups.find((g) => g.group === 'Transport')!;
+  transportGroup.amount += groundTransportEstimate;
+
+  // Accommodation: sourced directly from the accommodations table, the actual
+  // source of truth for what's been quoted/booked per property.
+  const accommodationAmount = trip.accommodations
+    .filter((a) => a.status !== 'cancelled')
+    .reduce((sum, a) => sum + a.cost, 0);
+  const accommodationConfirmed = trip.accommodations
+    .filter((a) => isAccommodationConfirmed(a.status))
+    .reduce((sum, a) => sum + a.cost, 0);
+  const accommodationPaid = trip.accommodations.reduce((sum, a) => sum + a.paid, 0);
+
+  // Meals: sourced from the live meal-assumptions engine (per-person/per-day rates
+  // scaled by trip length and traveller count), not a flat expense line.
+  const mealsAmount = computeMealBudget(trip, tripDurationDays(trip)).totalTrip;
+
+  const byGroup: BudgetGroup[] = [
+    transportGroup,
+    { group: 'Accommodation', amount: accommodationAmount, confirmedAmount: accommodationConfirmed },
+    { group: 'Meals', amount: mealsAmount, confirmedAmount: 0, isDaily: true },
+    expenseGroups.find((g) => g.group === 'Activities')!,
+    expenseGroups.find((g) => g.group === 'Miscellaneous')!,
+  ];
+
+  const totalTripCost = byGroup.reduce((sum, g) => sum + g.amount, 0);
+  const confirmedTripCost = byGroup.reduce((sum, g) => sum + g.confirmedAmount, 0);
+  const alreadyPaid = expensePaid + accommodationPaid;
+
+  const remaining = Math.max(totalTripCost - alreadyPaid, 0);
+  const remainingConfirmed = Math.max(confirmedTripCost - alreadyPaid, 0);
 
   return {
     totalTripCost,
@@ -81,7 +136,12 @@ export function computeBudgetSummary(trip: TripData): BudgetSummary {
     confirmedCostPerTraveller: confirmedTripCost / travellerCount,
     byCategory,
     byGroup,
+    groundTransportNote,
   };
+}
+
+function formatCurrencyRaw(amount: number): string {
+  return `€${Math.round(amount).toLocaleString()}`;
 }
 
 export function tripDurationDays(trip: TripData): number {

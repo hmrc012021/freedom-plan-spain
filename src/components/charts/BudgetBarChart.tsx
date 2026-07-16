@@ -6,12 +6,21 @@ interface GroupDatum {
   group: string;
   amount: number;
   confirmedAmount: number;
+  isDaily?: boolean;
 }
 
 // Two bars per category: the full bar is estimated+confirmed, the bar below
 // it is confirmed-only, both scaled against the largest category total so
 // categories stay comparable to each other as well as to themselves.
-export function BudgetBarChart({ data, currency }: { data: GroupDatum[]; currency: string }) {
+export function BudgetBarChart({
+  data,
+  currency,
+  notes,
+}: {
+  data: GroupDatum[];
+  currency: string;
+  notes?: (string | null)[];
+}) {
   const filtered = data.filter((d) => d.amount > 0);
 
   if (filtered.length === 0) {
@@ -32,6 +41,11 @@ export function BudgetBarChart({ data, currency }: { data: GroupDatum[]; currenc
               <span className="flex items-center gap-1.5 text-ink-soft dark:text-paper-dim/80">
                 <span className="h-2.5 w-2.5 rounded-full" style={{ background: color }} />
                 {d.group}
+                {d.isDaily && (
+                  <span className="rounded-full bg-amber-100 dark:bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-400">
+                    daily estimate
+                  </span>
+                )}
               </span>
               <span className="font-mono-num text-ink dark:text-paper-dim">
                 {formatCurrency(d.confirmedAmount, currency)}
@@ -60,6 +74,9 @@ export function BudgetBarChart({ data, currency }: { data: GroupDatum[]; currenc
           <span className="h-2 w-4 rounded-full bg-petrol-500" /> Confirmed only
         </span>
       </div>
+      {notes?.filter((n): n is string => Boolean(n)).map((n, i) => (
+        <p key={i} className="text-[11.5px] leading-relaxed text-slate">{n}</p>
+      ))}
     </div>
   );
 }
