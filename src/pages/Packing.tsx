@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { AppShell } from '@/components/layout/AppShell';
-import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
-import { ProgressBar } from '@/components/ui/ProgressBar';
+import { Card, CardHeader, CardTitle, ProgressBar } from '@freedom-plan/ui';
 import { useTripStore, useTrip } from '@/store/useTripStore';
 import { uid } from '@/lib/utils';
 import type { PackingItem } from '@/types/trip';

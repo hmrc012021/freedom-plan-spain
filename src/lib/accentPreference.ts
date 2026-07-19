@@ -4,83 +4,99 @@
 // affecting what the other person sees. This is a deliberate exception to
 // "everything lives in Supabase": accent color isn't trip data, it's a
 // display preference of whoever is currently looking at the screen.
+//
+// The storage/apply mechanism itself lives in @freedom-plan/ui so every
+// Freedom Plan app shares the exact same implementation; only the presets
+// and CSS variable names below are Spain-specific.
 
-export interface AccentPreset {
-  id: string;
-  label: string;
-  swatch: string; // representative hex for the picker UI
-  vars: {
-    50: string;
-    100: string;
-    400: string;
-    500: string;
-    600: string;
-    900: string;
-  };
-}
+import { createAccentPreference, type AccentPreset } from '@freedom-plan/ui';
+
+export type { AccentPreset };
 
 export const ACCENT_PRESETS: AccentPreset[] = [
   {
     id: 'pink',
     label: 'Pink',
     swatch: '#FF2D93',
-    vars: { 50: '#FFE9F3', 100: '#FFC7E1', 400: '#FF4FA6', 500: '#FF2D93', 600: '#D40F72', 900: '#6B0A3C' },
+    vars: {
+      'color-petrol-50': '#FFE9F3',
+      'color-petrol-100': '#FFC7E1',
+      'color-petrol-400': '#FF4FA6',
+      'color-petrol-500': '#FF2D93',
+      'color-petrol-600': '#D40F72',
+      'color-petrol-900': '#6B0A3C',
+    },
   },
   {
     id: 'cyan',
     label: 'Cyan',
     swatch: '#00D1E0',
-    vars: { 50: '#E3FBFD', 100: '#B3F2F7', 400: '#22D9E8', 500: '#00D1E0', 600: '#0AA3B0', 900: '#064952' },
+    vars: {
+      'color-petrol-50': '#E3FBFD',
+      'color-petrol-100': '#B3F2F7',
+      'color-petrol-400': '#22D9E8',
+      'color-petrol-500': '#00D1E0',
+      'color-petrol-600': '#0AA3B0',
+      'color-petrol-900': '#064952',
+    },
   },
   {
     id: 'amber',
     label: 'Amber',
     swatch: '#E8A33D',
-    vars: { 50: '#FBEACB', 100: '#F6D89A', 400: '#EFB158', 500: '#E8A33D', 600: '#B87F22', 900: '#5C3F0F' },
+    vars: {
+      'color-petrol-50': '#FBEACB',
+      'color-petrol-100': '#F6D89A',
+      'color-petrol-400': '#EFB158',
+      'color-petrol-500': '#E8A33D',
+      'color-petrol-600': '#B87F22',
+      'color-petrol-900': '#5C3F0F',
+    },
   },
   {
     id: 'green',
     label: 'Green',
     swatch: '#2FBE7A',
-    vars: { 50: '#E4F9EE', 100: '#B7EFD1', 400: '#48CE8F', 500: '#2FBE7A', 600: '#1E9660', 900: '#0F4A30' },
+    vars: {
+      'color-petrol-50': '#E4F9EE',
+      'color-petrol-100': '#B7EFD1',
+      'color-petrol-400': '#48CE8F',
+      'color-petrol-500': '#2FBE7A',
+      'color-petrol-600': '#1E9660',
+      'color-petrol-900': '#0F4A30',
+    },
   },
   {
     id: 'violet',
     label: 'Violet',
     swatch: '#8B5CF6',
-    vars: { 50: '#F1EBFE', 100: '#DBCAFC', 400: '#A17BF8', 500: '#8B5CF6', 600: '#6D3FD1', 900: '#371F6B' },
+    vars: {
+      'color-petrol-50': '#F1EBFE',
+      'color-petrol-100': '#DBCAFC',
+      'color-petrol-400': '#A17BF8',
+      'color-petrol-500': '#8B5CF6',
+      'color-petrol-600': '#6D3FD1',
+      'color-petrol-900': '#371F6B',
+    },
   },
   {
     id: 'petrol',
     label: 'Petrol (original)',
     swatch: '#0F5257',
-    vars: { 50: '#EAF3F3', 100: '#CFE4E4', 400: '#1D7A80', 500: '#0F5257', 600: '#0B3F43', 900: '#082B2E' },
+    vars: {
+      'color-petrol-50': '#EAF3F3',
+      'color-petrol-100': '#CFE4E4',
+      'color-petrol-400': '#1D7A80',
+      'color-petrol-500': '#0F5257',
+      'color-petrol-600': '#0B3F43',
+      'color-petrol-900': '#082B2E',
+    },
   },
 ];
 
-const STORAGE_KEY = 'trip-companion-accent';
+const { getStoredAccentId, applyAccent } = createAccentPreference({
+  storageKey: 'trip-companion-accent',
+  presets: ACCENT_PRESETS,
+});
 
-export function getStoredAccentId(): string {
-  try {
-    return localStorage.getItem(STORAGE_KEY) ?? ACCENT_PRESETS[0].id;
-  } catch {
-    return ACCENT_PRESETS[0].id;
-  }
-}
-
-export function applyAccent(id: string) {
-  const preset = ACCENT_PRESETS.find((p) => p.id === id) ?? ACCENT_PRESETS[0];
-  const root = document.documentElement;
-  root.style.setProperty('--color-petrol-50', preset.vars[50]);
-  root.style.setProperty('--color-petrol-100', preset.vars[100]);
-  root.style.setProperty('--color-petrol-400', preset.vars[400]);
-  root.style.setProperty('--color-petrol-500', preset.vars[500]);
-  root.style.setProperty('--color-petrol-600', preset.vars[600]);
-  root.style.setProperty('--color-petrol-900', preset.vars[900]);
-  try {
-    localStorage.setItem(STORAGE_KEY, preset.id);
-  } catch {
-    // localStorage unavailable (private browsing, etc.) -- accent still
-    // applies for this session, just won't persist across reloads.
-  }
-}
+export { getStoredAccentId, applyAccent };

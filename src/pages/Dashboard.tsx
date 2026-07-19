@@ -2,9 +2,7 @@ import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Users, CloudSun, ArrowRight, CheckCircle2 } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
-import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
-import { StatCard } from '@/components/ui/StatCard';
-import { ProgressBar } from '@/components/ui/ProgressBar';
+import { Card, CardHeader, CardTitle, StatCard, ProgressBar } from '@freedom-plan/ui';
 import { BudgetBarChart } from '@/components/charts/BudgetBarChart';
 import { DailySpendChart } from '@/components/charts/DailySpendChart';
 import { useTrip } from '@/store/useTripStore';
@@ -16,6 +14,7 @@ import {
   tripProgressPct,
   tripDurationDays,
   nextAction,
+  isBookingConfirmed,
 } from '@/lib/calculations';
 import { formatCurrency, formatDateFull } from '@/lib/utils';
 
@@ -73,7 +72,9 @@ export default function Dashboard() {
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle>Budget breakdown</CardTitle>
-            <span className="font-mono-num text-xs text-slate">{summary.byGroup.length} categories</span>
+            <span className="font-mono-num text-xs text-slate">
+              {summary.totalTripCost > 0 ? Math.round((summary.confirmedTripCost / summary.totalTripCost) * 100) : 0}% confirmed overall
+            </span>
           </CardHeader>
           <BudgetBarChart
             data={summary.byGroup}
@@ -93,7 +94,7 @@ export default function Dashboard() {
             </CardHeader>
             <ProgressBar value={completion} />
             <p className="mt-3 text-[13px] leading-relaxed text-slate">
-              {trip.bookings.filter((b) => b.status === 'paid' || b.status === 'booked').length} of{' '}
+              {trip.bookings.filter((b) => isBookingConfirmed(b.status)).length} of{' '}
               {trip.bookings.length} bookings are paid or confirmed.
             </p>
             <Link

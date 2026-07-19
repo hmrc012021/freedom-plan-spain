@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { AppShell } from '@/components/layout/AppShell';
-import { Card } from '@/components/ui/Card';
-import { StatusBadge } from '@/components/ui/Badge';
+import { Card, StatusBadge } from '@freedom-plan/ui';
 import { useTrip, useTripStore } from '@/store/useTripStore';
+import { bookingsFor } from '@/lib/calculations';
 import { formatDateFull } from '@/lib/utils';
 import type { ItineraryDay } from '@/types/trip';
 import { Plane, TrainFront, Bus, Car, MapPin, Ticket, Pencil, Trash2, Plus, X, Check } from 'lucide-react';
@@ -101,17 +101,20 @@ export default function Itinerary() {
                               </span>
                             );
                           })}
-                          {activities.map((a) => (
-                            <span
-                              key={a.id}
-                              className="inline-flex items-center gap-1.5 rounded-full border border-petrol-100 dark:border-dark-border px-2.5 py-1 text-[11.5px] text-ink-soft dark:text-paper-dim/80"
-                            >
-                              <Ticket size={12} />
-                              {a.name}
-                              {a.time && <span className="font-mono-num text-slate">{a.time}</span>}
-                              <StatusBadge status={a.status} />
-                            </span>
-                          ))}
+                          {activities.map((a) => {
+                            const linked = bookingsFor(trip, a.id)[0];
+                            return (
+                              <span
+                                key={a.id}
+                                className="inline-flex items-center gap-1.5 rounded-full border border-petrol-100 dark:border-dark-border px-2.5 py-1 text-[11.5px] text-ink-soft dark:text-paper-dim/80"
+                              >
+                                <Ticket size={12} />
+                                {a.name}
+                                {a.time && <span className="font-mono-num text-slate">{a.time}</span>}
+                                {linked && <StatusBadge status={linked.status} />}
+                              </span>
+                            );
+                          })}
                         </div>
                       )}
                     </>

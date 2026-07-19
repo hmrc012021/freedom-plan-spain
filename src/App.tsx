@@ -9,6 +9,7 @@ import Itinerary from '@/pages/Itinerary';
 import Budget from '@/pages/Budget';
 import Accommodation from '@/pages/Accommodation';
 import Transport from '@/pages/Transport';
+import Food from '@/pages/Food';
 import Bookings from '@/pages/Bookings';
 import Activities from '@/pages/Activities';
 import Packing from '@/pages/Packing';
@@ -79,6 +80,7 @@ export default function App() {
         <Route path="/budget" element={<Budget />} />
         <Route path="/accommodation" element={<Accommodation />} />
         <Route path="/transport" element={<Transport />} />
+        <Route path="/food" element={<Food />} />
         <Route path="/bookings" element={<Bookings />} />
         <Route path="/activities" element={<Activities />} />
         <Route path="/packing" element={<Packing />} />

@@ -1,261 +1,149 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { AppShell } from '@/components/layout/AppShell';
-import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
-import { StatusBadge } from '@/components/ui/Badge';
-import { BudgetBarChart } from '@/components/charts/BudgetBarChart';
+import { Card, CardHeader, CardTitle, StatusSelect } from '@freedom-plan/ui';
 import { useTripStore, useTrip } from '@/store/useTripStore';
-import { computeBudgetSummary, computeMealBudget, tripDurationDays, expenseTotal } from '@/lib/calculations';
-import { formatCurrency, formatCurrencyPrecise, uid } from '@/lib/utils';
+import { computeBudgetSummary, expenseTotal, type BudgetGroup } from '@/lib/calculations';
+import { formatCurrency, uid } from '@/lib/utils';
 import { exportBudgetCSV } from '@/lib/exportImport';
-import type { Expense, ExpenseCategory, PaymentStatus, RefundPolicy } from '@/types/trip';
-import { Download, Plus, Trash2 } from 'lucide-react';
+import type { Expense, ExpenseCategory, PaymentStatus } from '@/types/trip';
+import { Route, BedDouble, UtensilsCrossed, Ticket, MoreHorizontal, Download, Plus, Trash2, ArrowRight } from 'lucide-react';
 
-// Accommodation and meal categories (groceries/restaurants/coffee/alcohol) are
-// deliberately excluded — those are sourced from the Accommodation page and the
-// meal-budget estimator below instead, to avoid two disconnected numbers for the
-// same cost. Add accommodation costs there; add meal assumptions in the card below.
-const CATEGORIES: ExpenseCategory[] = [
-  'flights', 'rail', 'bus', 'rental-car', 'fuel', 'parking', 'tolls',
-  'activities', 'museum-tickets', 'shopping', 'laundry', 'pharmacy',
-  'mobile-data', 'insurance', 'incidentals',
-];
+const OTHER_CATEGORIES: ExpenseCategory[] = ['shopping', 'laundry', 'pharmacy', 'mobile-data', 'insurance', 'incidentals'];
 const STATUSES: PaymentStatus[] = ['paid', 'booked', 'reserved', 'estimated', 'optional', 'cancelled'];
-const REFUNDS: RefundPolicy[] = ['refundable', 'non-refundable', 'partial'];
+
+const CATEGORY_META: Record<string, { icon: typeof Route; to?: string; color: string }> = {
+  Transport: { icon: Route, to: '/transport', color: '#0F5257' },
+  Accommodation: { icon: BedDouble, to: '/accommodation', color: '#A64E3B' },
+  Meals: { icon: UtensilsCrossed, to: '/food', color: '#1D7A80' },
+  Activities: { icon: Ticket, to: '/activities', color: '#CC8720' },
+  Miscellaneous: { icon: MoreHorizontal, color: '#6B5B95' },
+};
+
+function CategoryBox({ group, currency }: { group: BudgetGroup; currency: string }) {
+  const meta = CATEGORY_META[group.group];
+  const Icon = meta.icon;
+  const pct = group.amount > 0 ? Math.round((group.confirmedAmount / group.amount) * 100) : 0;
+
+  const content = (
+    <>
+      <div className="mb-2 flex items-center justify-between">
+        <span className="flex items-center gap-1.5 text-[13px] font-medium text-ink-soft dark:text-paper-dim/80">
+          <Icon size={14} style={{ color: meta.color }} /> {group.group}
+        </span>
+        {meta.to && <ArrowRight size={13} className="text-slate" />}
+      </div>
+      <div className="font-mono-num text-xl font-semibold text-ink dark:text-paper-dim">
+        {formatCurrency(group.amount, currency)}
+      </div>
+      <div className="mt-1 text-[11px] text-slate">
+        {formatCurrency(group.confirmedAmount, currency)} confirmed · {pct}%
+        {group.isProvisional && ' · not yet booked'}
+        {group.isDaily && ' · daily estimate'}
+      </div>
+      <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-black/5 dark:bg-white/10">
+        <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: meta.color }} />
+      </div>
+    </>
+  );
+
+  const className = 'block rounded-2xl border border-petrol-100 dark:border-dark-border bg-white/70 dark:bg-dark-surface p-4 shadow-sm shadow-petrol-900/5 transition-colors hover:border-petrol-400/40';
+
+  return meta.to ? (
+    <Link to={meta.to} className={className}>{content}</Link>
+  ) : (
+    <div className={className}>{content}</div>
+  );
+}
 
 export default function Budget() {
   const trip = useTrip();
   const updateExpense = useTripStore((s) => s.updateExpense);
   const addExpense = useTripStore((s) => s.addExpense);
   const removeExpense = useTripStore((s) => s.removeExpense);
-  const updateMealAssumption = useTripStore((s) => s.updateMealAssumption);
 
   const summary = useMemo(() => computeBudgetSummary(trip), [trip]);
-  const [mealDays, setMealDays] = useState(tripDurationDays(trip));
-  const mealBudget = useMemo(() => computeMealBudget(trip, mealDays), [trip, mealDays]);
+  const overallPct = summary.totalTripCost > 0 ? Math.round((summary.confirmedTripCost / summary.totalTripCost) * 100) : 0;
 
-  const [filterStatus, setFilterStatus] = useState<'all' | PaymentStatus>('all');
-
-  const filteredExpenses = trip.expenses.filter((e) => filterStatus === 'all' || e.status === filterStatus);
+  const other = trip.expenses.filter((e) => OTHER_CATEGORIES.includes(e.category));
 
   function handleAdd() {
-    const exp: Expense = {
-      id: uid('ex'),
-      label: 'New expense',
-      category: 'incidentals',
-      amount: 0,
-      status: 'estimated',
-      refund: 'refundable',
-    };
+    const exp: Expense = { id: uid('ex'), label: 'New expense', category: 'incidentals', amount: 0, status: 'estimated', refund: 'refundable' };
     addExpense(exp);
   }
 
   return (
     <AppShell title="Budget">
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle>Expenses</CardTitle>
-            <div className="flex items-center gap-2">
-              <select
-                value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value as typeof filterStatus)}
-                className="rounded-lg border border-petrol-100 dark:border-dark-border bg-transparent px-2 py-1 text-[12px] text-ink-soft dark:text-paper-dim/80"
-              >
-                <option value="all">All statuses</option>
-                {STATUSES.map((s) => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
-              </select>
-              <button
-                onClick={() => exportBudgetCSV(trip)}
-                className="flex items-center gap-1.5 rounded-lg border border-petrol-100 dark:border-dark-border px-2.5 py-1 text-[12px] text-ink-soft dark:text-paper-dim/80 hover:bg-petrol-50 dark:hover:bg-dark-border"
-              >
-                <Download size={13} /> CSV
-              </button>
-              <button
-                onClick={handleAdd}
-                className="flex items-center gap-1.5 rounded-lg bg-petrol-500 px-2.5 py-1 text-[12px] font-medium text-paper hover:bg-petrol-600"
-              >
-                <Plus size={13} /> Add
-              </button>
-            </div>
-          </CardHeader>
+      <div className="mb-4 flex items-center justify-between">
+        <p className="text-[13px] text-slate">
+          {summary.byGroup.length} categories · tap one for the full picture
+        </p>
+        <span className="font-mono-num text-[13px] font-semibold text-petrol-500">{overallPct}% confirmed overall</span>
+      </div>
 
-          <div className="max-h-[600px] overflow-auto">
-            <table className="w-full text-left text-[13px]">
-              <thead>
-                <tr className="border-b border-petrol-100 dark:border-dark-border text-[11px] uppercase tracking-wide text-slate">
-                  <th className="py-2 pr-2 font-medium">Label</th>
-                  <th className="py-2 pr-2 font-medium">Category</th>
-                  <th className="py-2 pr-2 font-medium">Amount</th>
-                  <th className="py-2 pr-2 font-medium">Status</th>
-                  <th className="py-2 pr-2 font-medium">Refund</th>
-                  <th className="py-2 font-medium" />
-                </tr>
-              </thead>
-              <tbody>
-                {filteredExpenses.map((exp) => (
-                  <tr key={exp.id} className="border-b border-petrol-50 dark:border-dark-border/60 last:border-0">
-                    <td className="py-1.5 pr-2">
-                      <input
-                        value={exp.label}
-                        onChange={(e) => updateExpense(exp.id, { label: e.target.value })}
-                        className="w-full min-w-[120px] rounded-md bg-transparent px-1.5 py-1 text-ink dark:text-paper-dim outline-none hover:bg-petrol-50 dark:hover:bg-dark-border focus:bg-petrol-50 dark:focus:bg-dark-border"
-                      />
-                    </td>
-                    <td className="py-1.5 pr-2">
-                      <select
-                        value={exp.category}
-                        onChange={(e) => updateExpense(exp.id, { category: e.target.value as ExpenseCategory })}
-                        className="rounded-md bg-transparent px-1.5 py-1 text-ink-soft dark:text-paper-dim/80 outline-none hover:bg-petrol-50 dark:hover:bg-dark-border"
-                      >
-                        {CATEGORIES.map((c) => (
-                          <option key={c} value={c}>{c.replace(/-/g, ' ')}</option>
-                        ))}
-                      </select>
-                    </td>
-                    <td className="py-1.5 pr-2">
-                      <input
-                        type="number"
-                        value={exp.amount}
-                        onChange={(e) => updateExpense(exp.id, { amount: Number(e.target.value) })}
-                        className="w-20 rounded-md bg-transparent px-1.5 py-1 font-mono-num text-ink dark:text-paper-dim outline-none hover:bg-petrol-50 dark:hover:bg-dark-border"
-                      />
-                      {exp.perTraveller && <span className="ml-1 text-[10px] text-slate">/pp</span>}
-                    </td>
-                    <td className="py-1.5 pr-2">
-                      <select
-                        value={exp.status}
-                        onChange={(e) => updateExpense(exp.id, { status: e.target.value as PaymentStatus })}
-                        className="rounded-md bg-transparent outline-none"
-                      >
-                        {STATUSES.map((s) => (
-                          <option key={s} value={s}>{s}</option>
-                        ))}
-                      </select>
-                    </td>
-                    <td className="py-1.5 pr-2">
-                      <select
-                        value={exp.refund}
-                        onChange={(e) => updateExpense(exp.id, { refund: e.target.value as RefundPolicy })}
-                        className="rounded-md bg-transparent text-[12px] outline-none"
-                      >
-                        {REFUNDS.map((r) => (
-                          <option key={r} value={r}>{r}</option>
-                        ))}
-                      </select>
-                    </td>
-                    <td className="py-1.5 text-right">
-                      <button
-                        onClick={() => removeExpense(exp.id)}
-                        className="rounded-md p-1 text-slate hover:bg-brick-400/10 hover:text-brick-500"
-                        aria-label="Remove expense"
-                      >
-                        <Trash2 size={13} />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="mt-3 flex items-center justify-between border-t border-petrol-100 dark:border-dark-border pt-3 text-[13px]">
-            <span className="text-slate">{filteredExpenses.length} expenses shown</span>
-            <span className="font-mono-num font-semibold text-ink dark:text-paper-dim">
-              {formatCurrency(
-                filteredExpenses.reduce((s, e) => (e.status !== 'cancelled' ? s + expenseTotal(e, trip.travellers.length) : s), 0),
-                trip.currency
-              )}
-            </span>
-          </div>
-        </Card>
-
-        <div className="space-y-5">
-          <Card>
-            <CardHeader>
-              <CardTitle>By category</CardTitle>
-            </CardHeader>
-            <BudgetBarChart
-              data={summary.byGroup}
-              currency={trip.currency}
-              notes={[
-                summary.groundTransportNote,
-                `Meals reflect the daily assumptions below, scaled for ${trip.travellers.length} travellers × ${tripDurationDays(trip)} days.`,
-              ]}
-            />
-          </Card>
-        </div>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {summary.byGroup.map((g) => (
+          <CategoryBox key={g.group} group={g} currency={trip.currency} />
+        ))}
       </div>
 
       <Card className="mt-5">
         <CardHeader>
-          <CardTitle>Meal budget</CardTitle>
-          <span className="font-mono-num text-xs text-slate">{mealDays} days · {trip.travellers.length} travellers</span>
+          <CardTitle>Other</CardTitle>
+          <div className="flex items-center gap-2">
+            <button onClick={() => exportBudgetCSV(trip)} className="flex items-center gap-1.5 rounded-lg border border-petrol-100 dark:border-dark-border px-2.5 py-1 text-[12px] text-ink-soft dark:text-paper-dim/80 hover:bg-petrol-50 dark:hover:bg-dark-border">
+              <Download size={13} /> CSV
+            </button>
+            <button onClick={handleAdd} className="flex items-center gap-1.5 rounded-lg bg-petrol-500 px-2.5 py-1 text-[12px] font-medium text-paper hover:bg-petrol-600">
+              <Plus size={13} /> Add
+            </button>
+          </div>
         </CardHeader>
-
-        <input
-          type="range"
-          min={1}
-          max={20}
-          value={mealDays}
-          onChange={(e) => setMealDays(Number(e.target.value))}
-          className="w-full accent-petrol-500"
-        />
-
-        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div className="space-y-2">
-            {trip.mealAssumptions.map((m) => (
-              <label key={m.id} className="flex items-center justify-between gap-3 text-[13px]">
-                <span className="flex items-center gap-2 text-ink-soft dark:text-paper-dim/80">
-                  <input
-                    type="checkbox"
-                    checked={m.enabled}
-                    onChange={(e) => updateMealAssumption(m.id, { enabled: e.target.checked })}
-                    className="accent-petrol-500"
-                  />
-                  {m.label}
-                </span>
-                <span className="flex items-center gap-1.5">
+        <p className="mb-3 text-[12.5px] text-slate">
+          Things that don't fit accommodation, transport, food, or activities — shopping, insurance, a general reserve.
+        </p>
+        <div className="space-y-2">
+          {other.map((exp) => (
+            <div key={exp.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-petrol-50 dark:border-dark-border/60 px-3 py-2.5">
+              <input
+                value={exp.label}
+                onChange={(e) => updateExpense(exp.id, { label: e.target.value })}
+                className="min-w-[140px] flex-1 rounded-md bg-transparent px-1.5 py-1 text-[13px] text-ink dark:text-paper-dim outline-none hover:bg-petrol-50 dark:hover:bg-dark-border"
+              />
+              <div className="flex items-center gap-2">
+                <select
+                  value={exp.category}
+                  onChange={(e) => updateExpense(exp.id, { category: e.target.value as ExpenseCategory })}
+                  className="rounded-md bg-transparent px-1.5 py-1 text-[12px] text-ink-soft dark:text-paper-dim/80 outline-none hover:bg-petrol-50 dark:hover:bg-dark-border"
+                >
+                  {OTHER_CATEGORIES.map((c) => (
+                    <option key={c} value={c}>{c.replace(/-/g, ' ')}</option>
+                  ))}
+                </select>
+                <span className="flex items-center gap-1 font-mono-num text-[13px] text-ink dark:text-paper-dim">
+                  <span className="text-slate text-[11px]">{trip.currency}</span>
                   <input
                     type="number"
-                    value={m.costPerPerson}
-                    onChange={(e) => updateMealAssumption(m.id, { costPerPerson: Number(e.target.value) })}
-                    className="w-16 rounded-md border border-petrol-100 dark:border-dark-border bg-transparent px-1.5 py-0.5 text-right font-mono-num text-ink dark:text-paper-dim"
-                    step="0.5"
+                    value={exp.amount}
+                    onChange={(e) => updateExpense(exp.id, { amount: Number(e.target.value) })}
+                    className="w-24 rounded-md bg-transparent px-1.5 py-0.5 text-right outline-none hover:bg-petrol-50 dark:hover:bg-dark-border"
                   />
-                  <span className="whitespace-nowrap text-[11px] text-slate">
-                    per person{m.frequency === 'daily' ? ' / day' : ', ~every 3rd day'}
-                  </span>
                 </span>
-              </label>
-            ))}
-          </div>
-          <div className="rounded-xl bg-petrol-50 dark:bg-dark-border/40 p-4">
-            <div className="text-[11px] uppercase tracking-wide text-slate">Estimated meal total</div>
-            <div className="font-mono-num mt-1 text-2xl font-semibold text-petrol-600 dark:text-petrol-100">
-              {formatCurrency(mealBudget.totalTrip, trip.currency)}
+                <StatusSelect value={exp.status} options={STATUSES} onChange={(v) => updateExpense(exp.id, { status: v as PaymentStatus })} />
+                <button onClick={() => removeExpense(exp.id)} className="rounded-md p-1 text-slate hover:bg-brick-400/10 hover:text-brick-500" aria-label="Remove">
+                  <Trash2 size={13} />
+                </button>
+              </div>
             </div>
-            <div className="mt-1 text-[12px] text-slate">
-              {formatCurrencyPrecise(mealBudget.dailyPerPerson, trip.currency)} per person / day
-            </div>
-            <div className="mt-3 space-y-1.5 border-t border-petrol-100 dark:border-dark-border pt-3">
-              {mealBudget.byLabel.map((b) => (
-                <div key={b.label} className="flex justify-between text-[12px] text-ink-soft dark:text-paper-dim/80">
-                  <span>{b.label}</span>
-                  <span className="font-mono-num">{formatCurrency(b.amount, trip.currency)}</span>
-                </div>
-              ))}
-            </div>
-          </div>
+          ))}
+        </div>
+        <div className="mt-3 flex items-center justify-between border-t border-petrol-100 dark:border-dark-border pt-3 text-[13px]">
+          <span className="text-slate">{other.length} items shown</span>
+          <span className="font-mono-num font-semibold text-ink dark:text-paper-dim">
+            {formatCurrency(other.reduce((s, e) => (e.status !== 'cancelled' ? s + expenseTotal(e, trip.travellers.length) : s), 0), trip.currency)}
+          </span>
         </div>
       </Card>
-
-      <div className="mt-4 flex flex-wrap gap-2">
-        {[...new Set(trip.expenses.map((e) => e.status))].map((s) => (
-          <StatusBadge key={s} status={s} />
-        ))}
-      </div>
     </AppShell>
   );
 }

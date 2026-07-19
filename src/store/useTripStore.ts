@@ -38,6 +38,7 @@ interface TripStore {
   removeItineraryDay: (id: string) => void;
 
   updateScenario: (id: string, patch: Partial<TransportScenario>) => void;
+  selectTransportScenario: (id: string) => void;
 
   togglePackingItem: (id: string) => void;
   addPackingItem: (item: PackingItem) => void;
@@ -94,8 +95,31 @@ export const useTripStore = create<TripStore>()((set, get) => ({
   updateAccommodation: (id, patch) => {
     const trip = get().trip;
     if (!trip) return;
-    set({ trip: { ...trip, accommodations: trip.accommodations.map((a) => (a.id === id ? { ...a, ...patch } : a)) } });
+    const current = trip.accommodations.find((a) => a.id === id);
+    const updated = current ? { ...current, ...patch } : undefined;
+    const datesChanged = updated && (patch.checkIn !== undefined || patch.checkOut !== undefined);
+
+    // Editing dates relinks which itinerary days point at this accommodation:
+    // clear any day that no longer falls in [checkIn, checkOut), link any
+    // that now does. Mirrors the equivalent server-side sync below.
+    const itineraryDays = datesChanged
+      ? trip.itineraryDays.map((d) => {
+          const inWindow = updated!.checkIn <= d.date && d.date < updated!.checkOut;
+          if (inWindow) return { ...d, accommodationId: id };
+          if (d.accommodationId === id) return { ...d, accommodationId: undefined };
+          return d;
+        })
+      : trip.itineraryDays;
+
+    set({
+      trip: {
+        ...trip,
+        accommodations: trip.accommodations.map((a) => (a.id === id ? { ...a, ...patch } : a)),
+        itineraryDays,
+      },
+    });
     void repo.upsertAccommodation(trip.id, { id, ...patch });
+    if (datesChanged) void repo.syncAccommodationItinerary(trip.id, id, updated!.checkIn, updated!.checkOut);
     get().logEdit(`Updated accommodation: ${patch.name ?? id}`);
   },
 
@@ -230,6 +254,22 @@ export const useTripStore = create<TripStore>()((set, get) => ({
     if (patch.lineItems) void repo.updateScenarioLineItems(id, patch.lineItems);
   },
 
+  // Several scenarios can exist for comparison; only the one explicitly
+  // selected here feeds the working budget -- never automatic, never the
+  // cheapest-recommended one by default.
+  selectTransportScenario: (id) => {
+    const trip = get().trip;
+    if (!trip) return;
+    set({
+      trip: {
+        ...trip,
+        transportScenarios: trip.transportScenarios.map((s) => ({ ...s, isSelected: s.id === id })),
+      },
+    });
+    void repo.selectTransportScenario(trip.id, id);
+    get().logEdit('Selected transport scenario for working budget');
+  },
+
   togglePackingItem: (id) => {
     const trip = get().trip;
     if (!trip) return;
@@ -244,7 +284,12 @@ export const useTripStore = create<TripStore>()((set, get) => ({
     const trip = get().trip;
     if (!trip) return;
     set({ trip: { ...trip, packingItems: [...trip.packingItems, item] } });
-    void repo.insertPackingItem(trip.id, item);
+    void repo.insertPackingItem(trip.id, item).then((realId) => {
+      if (!realId) return;
+      const t = get().trip;
+      if (!t) return;
+      set({ trip: { ...t, packingItems: t.packingItems.map((p) => (p.id === item.id ? { ...p, id: realId } : p)) } });
+    });
   },
 
   removePackingItem: (id) => {

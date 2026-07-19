@@ -48,20 +48,126 @@ function isConfirmed(status: Expense['status']): boolean {
   return status === 'paid' || status === 'booked' || status === 'reserved';
 }
 
-function isAccommodationConfirmed(status: Accommodation['status']): boolean {
-  return status === 'paid' || status === 'booked' || status === 'reserved';
+// A budget entry (an accommodation/activity row, or a pooled category
+// estimate like Ground transport/Food) has no status of its own -- it's an
+// estimate until a booking links to it. Once linked, the booking's status
+// (need-booking/reserved/paid) is what "confirmed" means.
+export function isBookingConfirmed(status: Booking['status']): boolean {
+  return status !== 'need-booking';
 }
 
-// Categories now sourced from their own dedicated tables/engines rather than
-// freeform expense rows, so they're excluded here to avoid double-counting:
-// accommodation → the accommodations table (real per-property cost/paid/status),
-// groceries/restaurants/coffee/alcohol → the meal-assumptions engine below.
-const EXPENSE_DRIVEN_GROUPS: Record<string, ExpenseCategory[]> = {
-  Airfare: EXPENSE_CATEGORY_GROUPS.Airfare,
-  'Ground transport': EXPENSE_CATEGORY_GROUPS['Ground transport'],
-  Activities: EXPENSE_CATEGORY_GROUPS.Activities,
-  Miscellaneous: EXPENSE_CATEGORY_GROUPS.Miscellaneous,
-};
+export function bookingsFor(trip: TripData, entityId: string): Booking[] {
+  return trip.bookings.filter((b) => b.linkedEntityId === entityId);
+}
+
+function poolBookings(trip: TripData, categories: Booking['category'][]): Booking[] {
+  return trip.bookings.filter((b) => categories.includes(b.category));
+}
+
+export interface ReconcileResult {
+  forecast: number;
+  confirmedAmount: number;
+  paidAmount: number;
+}
+
+// The core planning-vs-booking rule: an estimate stays the forecast until a
+// *confirmed* booking (reserved/paid; need-booking is still just intent,
+// doesn't touch the forecast) reconciles against it, per its mode:
+// - replace: fully substitutes whatever's left of the estimate with the
+//   booking's actual cost (a second booking after a replace has nothing left
+//   to reduce, so it just adds on top -- order matters).
+// - partial: consumes `reconciledAmount` (defaulting to the booking's own
+//   cost) of the *remaining* estimate, then adds the actual cost.
+// - additional / unplanned: pure addition, the estimate is never reduced.
+// Multiple bookings can reconcile against the same estimate; they're applied
+// in array order.
+export function reconcileEstimate(estimate: number, bookings: Booking[]): ReconcileResult {
+  let forecast = estimate;
+  let remainingPlan = estimate;
+  let confirmedAmount = 0;
+  let paidAmount = 0;
+
+  for (const booking of bookings) {
+    if (!isBookingConfirmed(booking.status) || booking.cost == null) continue;
+    const actual = booking.cost;
+    const mode = booking.reconciliationMode ?? (booking.linkedEntityId ? 'replace' : 'unplanned');
+
+    confirmedAmount += actual;
+    if (booking.status === 'paid') paidAmount += booking.paidAmount ?? actual;
+
+    if (mode === 'replace') {
+      forecast -= remainingPlan;
+      remainingPlan = 0;
+      forecast += actual;
+    } else if (mode === 'partial') {
+      const reduction = Math.min(Math.max(booking.reconciledAmount ?? actual, 0), remainingPlan);
+      remainingPlan -= reduction;
+      forecast -= reduction;
+      forecast += actual;
+    } else {
+      // additional or unplanned: pure addition, estimate untouched
+      forecast += actual;
+    }
+  }
+
+  return { forecast: Math.max(forecast, 0), confirmedAmount, paidAmount };
+}
+
+// Per-item budget entry (accommodation/activity): reconciles its estimate
+// against every booking linked to it (not just one -- a stay can have a
+// deposit booking and a balance booking, for example).
+function itemLine(trip: TripData, itemId: string, estimate: number) {
+  const { forecast, confirmedAmount, paidAmount } = reconcileEstimate(estimate, bookingsFor(trip, itemId));
+  return { amount: forecast, confirmedAmount, paidAmount };
+}
+
+// Pooled budget entry (Food): one estimate for the whole category; any
+// confirmed booking in that category reconciles against it the same way.
+function pooledLine(trip: TripData, categories: Booking['category'][], estimate: number) {
+  const { forecast, confirmedAmount, paidAmount } = reconcileEstimate(estimate, poolBookings(trip, categories));
+  return { amount: forecast, confirmedAmount, paidAmount, isEstimate: confirmedAmount === 0 };
+}
+
+// Ground transport: only the explicitly *selected* scenario feeds the
+// budget (never the cheapest-recommended one automatically). Each of its
+// line items is its own estimate, reconciled against bookings linked to
+// that specific line item. A ground-transport-category booking that isn't
+// linked to a selected-scenario line item (unplanned, or linked elsewhere)
+// has no estimate to reconcile against, so it's a pure addition.
+function groundTransportLine(trip: TripData) {
+  const selected = trip.transportScenarios.find((s) => s.isSelected);
+  if (!selected) return { amount: 0, confirmedAmount: 0, paidAmount: 0, selected: undefined as TransportScenario | undefined };
+
+  let amount = 0;
+  let confirmedAmount = 0;
+  let paidAmount = 0;
+
+  for (const item of selected.lineItems) {
+    const itemBookings = item.id
+      ? trip.bookings.filter((b) => b.linkedEntityType === 'transport_scenario_line_item' && b.linkedEntityId === item.id)
+      : [];
+    const r = reconcileEstimate(item.amount, itemBookings);
+    amount += r.forecast;
+    confirmedAmount += r.confirmedAmount;
+    paidAmount += r.paidAmount;
+  }
+
+  const linkedLineItemIds = new Set(selected.lineItems.map((li) => li.id).filter((id): id is string => id != null));
+  const otherGroundBookings = trip.bookings.filter(
+    (b) =>
+      (b.category === 'train' || b.category === 'bus' || b.category === 'car-rental') &&
+      isBookingConfirmed(b.status) &&
+      b.cost != null &&
+      !(b.linkedEntityType === 'transport_scenario_line_item' && b.linkedEntityId && linkedLineItemIds.has(b.linkedEntityId))
+  );
+  for (const b of otherGroundBookings) {
+    amount += b.cost!;
+    confirmedAmount += b.cost!;
+    if (b.status === 'paid') paidAmount += b.paidAmount ?? b.cost!;
+  }
+
+  return { amount, confirmedAmount, paidAmount, selected };
+}
 
 export function computeBudgetSummary(trip: TripData): BudgetSummary {
   const travellerCount = trip.travellers.length || 1;
@@ -80,51 +186,78 @@ export function computeBudgetSummary(trip: TripData): BudgetSummary {
     }
   }
 
-  const expenseGroups = Object.entries(EXPENSE_DRIVEN_GROUPS).map(([group, cats]) => ({
-    group,
-    amount: cats.reduce((sum, c) => sum + (byCategory[c] ?? 0), 0),
-    confirmedAmount: cats.reduce((sum, c) => sum + (confirmedByCategory[c] ?? 0), 0),
-  }));
+  // Airfare and Miscellaneous stay freeform-expense-driven -- out of scope
+  // for the budget-entry/booking model below.
+  const airfare: BudgetGroup = {
+    group: 'Airfare',
+    amount: EXPENSE_CATEGORY_GROUPS.Airfare.reduce((sum, c) => sum + (byCategory[c] ?? 0), 0),
+    confirmedAmount: EXPENSE_CATEGORY_GROUPS.Airfare.reduce((sum, c) => sum + (confirmedByCategory[c] ?? 0), 0),
+  };
+  const miscellaneous: BudgetGroup = {
+    group: 'Miscellaneous',
+    amount: EXPENSE_CATEGORY_GROUPS.Miscellaneous.reduce((sum, c) => sum + (byCategory[c] ?? 0), 0),
+    confirmedAmount: EXPENSE_CATEGORY_GROUPS.Miscellaneous.reduce((sum, c) => sum + (confirmedByCategory[c] ?? 0), 0),
+  };
 
-  // Ground transport is a decision the traveller hasn't locked in yet — fold the
-  // recommended (cheapest) scenario in as a provisional, unconfirmed estimate so
-  // it actually shows up in the budget instead of living only on the Transport page.
+  // Ground transport: only the explicitly selected scenario feeds the
+  // budget -- the cheapest recommendation is shown separately and never
+  // auto-selected. No selection means ground transport contributes nothing.
   const scenarioRec = recommendTransportScenario(trip.transportScenarios, travellerCount);
   const recommendedScenario = scenarioRec.results.find((r) => r.scenario.id === scenarioRec.recommendedId);
-  const groundTransportEstimate = recommendedScenario?.total ?? 0;
-  const groundTransportNote = recommendedScenario
-    ? `Includes the recommended "${recommendedScenario.scenario.name}" ground transport option (${formatCurrencyRaw(groundTransportEstimate)}), not yet booked.`
-    : null;
+  const { paidAmount: groundTransportPaid, selected: selectedScenario, ...groundTransport } = groundTransportLine(trip);
+  const groundTransportNote = !selectedScenario
+    ? recommendedScenario
+      ? `No scenario selected yet, so ground transport isn't in the budget. Recommended: "${recommendedScenario.scenario.name}" (${formatCurrencyRaw(recommendedScenario.total)}).`
+      : 'No transport scenario selected yet, so ground transport isn’t in the budget.'
+    : recommendedScenario && selectedScenario.id !== recommendedScenario.scenario.id
+      ? `Using "${selectedScenario.name}" for the working budget. Recommended cheapest: "${recommendedScenario.scenario.name}" (${formatCurrencyRaw(recommendedScenario.total)}).`
+      : `Using the recommended "${selectedScenario.name}" scenario for the working budget.`;
 
-  const groundTransportGroup = expenseGroups.find((g) => g.group === 'Ground transport')!;
-  groundTransportGroup.amount += groundTransportEstimate;
-
-  // Accommodation: sourced directly from the accommodations table, the actual
-  // source of truth for what's been quoted/booked per property.
-  const accommodationAmount = trip.accommodations
-    .filter((a) => a.status !== 'cancelled')
-    .reduce((sum, a) => sum + a.cost, 0);
-  const accommodationConfirmed = trip.accommodations
-    .filter((a) => isAccommodationConfirmed(a.status))
-    .reduce((sum, a) => sum + a.cost, 0);
+  // Accommodation: each row is its own budget entry. Paid tracking stays on
+  // accommodations.paid (a real, directly-editable deposit/balance field) --
+  // not booking-derived, unlike activities/ground-transport/food below.
+  const accommodationLines = trip.accommodations.map((a) => itemLine(trip, a.id, a.cost));
+  const accommodationAmount = accommodationLines.reduce((sum, l) => sum + l.amount, 0);
+  const accommodationConfirmed = accommodationLines.reduce((sum, l) => sum + l.confirmedAmount, 0);
   const accommodationPaid = trip.accommodations.reduce((sum, a) => sum + a.paid, 0);
 
-  // Meals: sourced from the live meal-assumptions engine (per-person/per-day rates
-  // scaled by trip length and traveller count), not a flat expense line.
-  const mealsAmount = computeMealBudget(trip, tripDurationDays(trip)).totalTrip;
+  // Activities: same per-item rule -- this also fixes activities.totalCost
+  // never having counted toward the budget total at all.
+  const activityLines = trip.activities.map((a) => itemLine(trip, a.id, a.totalCost ?? 0));
+  const activitiesAmount = activityLines.reduce((sum, l) => sum + l.amount, 0);
+  const activitiesConfirmed = activityLines.reduce((sum, l) => sum + l.confirmedAmount, 0);
+  const activitiesPaid = activityLines.reduce((sum, l) => sum + l.paidAmount, 0);
+
+  // Meals: the live meal-assumptions engine is the estimate until a real
+  // food-category booking exists.
+  const mealsEstimate = computeMealBudget(trip, tripDurationDays(trip)).totalTrip;
+  const { isEstimate: mealsIsEstimate, paidAmount: mealsPaid, ...meals } = pooledLine(trip, ['food'], mealsEstimate);
+
+  // Transport combines Airfare (freeform, usually booked/paid early) and
+  // Ground transport (the scenario comparison) into one category -- they're
+  // two different budget mechanisms under the hood, but the same trip concern.
+  const transport: BudgetGroup = {
+    group: 'Transport',
+    amount: airfare.amount + groundTransport.amount,
+    confirmedAmount: airfare.confirmedAmount + groundTransport.confirmedAmount,
+    isProvisional: !selectedScenario || groundTransport.confirmedAmount < groundTransport.amount,
+  };
 
   const byGroup: BudgetGroup[] = [
-    expenseGroups.find((g) => g.group === 'Airfare')!,
-    { ...groundTransportGroup, isProvisional: groundTransportEstimate > 0 },
+    transport,
     { group: 'Accommodation', amount: accommodationAmount, confirmedAmount: accommodationConfirmed },
-    { group: 'Meals', amount: mealsAmount, confirmedAmount: 0, isDaily: true },
-    expenseGroups.find((g) => g.group === 'Activities')!,
-    expenseGroups.find((g) => g.group === 'Miscellaneous')!,
+    { group: 'Meals', ...meals, isDaily: mealsIsEstimate },
+    { group: 'Activities', amount: activitiesAmount, confirmedAmount: activitiesConfirmed },
+    miscellaneous,
   ];
 
   const totalTripCost = byGroup.reduce((sum, g) => sum + g.amount, 0);
   const confirmedTripCost = byGroup.reduce((sum, g) => sum + g.confirmedAmount, 0);
-  const alreadyPaid = expensePaid + accommodationPaid;
+  // Bookings marked "paid" are real money spent, same as a paid freeform
+  // expense or an accommodation deposit -- count them here too, or "Already
+  // Paid" silently loses money the moment a booking (not an expense row)
+  // is what's tracking payment for activities/ground-transport/food.
+  const alreadyPaid = expensePaid + accommodationPaid + activitiesPaid + groundTransportPaid + mealsPaid;
 
   const remaining = Math.max(totalTripCost - alreadyPaid, 0);
   const remainingConfirmed = Math.max(confirmedTripCost - alreadyPaid, 0);
@@ -170,7 +303,7 @@ export function daysUntilDeparture(trip: TripData): number {
 
 export function bookingCompletionPct(trip: TripData): number {
   if (trip.bookings.length === 0) return 0;
-  const settled = trip.bookings.filter((b) => b.status === 'paid' || b.status === 'booked').length;
+  const settled = trip.bookings.filter((b) => isBookingConfirmed(b.status)).length;
   return Math.round((settled / trip.bookings.length) * 100);
 }
 
@@ -235,13 +368,15 @@ export function scoreAccommodation(
   const restaurantBreakfastEstimate = 8; // per person, rough eating-out baseline
   const restaurantDinnerEstimate = premiumDinner?.costPerPerson ?? 22;
 
-  const mealSavingsPerPerson = acc.hasKitchen
+  // Unknown (null) amenity availability must never behave like a confirmed
+  // "no" -- only a confirmed `true` unlocks the modeled savings.
+  const mealSavingsPerPerson = acc.hasKitchen === true
     ? (restaurantBreakfastEstimate - (cookBreakfast?.costPerPerson ?? 3.5)) +
       (restaurantDinnerEstimate - (cookDinner?.costPerPerson ?? 6))
     : 0;
   const mealSavingsPerNight = mealSavingsPerPerson * travellerCount;
 
-  const parkingSavingsPerNight = acc.hasParking ? trip.settings.avgParkingPerDay : 0;
+  const parkingSavingsPerNight = acc.hasParking === true ? trip.settings.avgParkingPerDay : 0;
 
   const effectiveCostPerNight = nightlyRate - mealSavingsPerNight - parkingSavingsPerNight;
 
@@ -249,13 +384,21 @@ export function scoreAccommodation(
   let score = 0;
   const reasoning: string[] = [];
 
-  if (acc.hasKitchen) {
+  if (acc.hasKitchen === true) {
     score += 40;
     reasoning.push('Has a kitchen — the top priority for this trip.');
-  } else if (acc.isException) {
-    reasoning.push(`No kitchen, but flagged as a deliberate exception: ${acc.exceptionReason ?? 'exceptional value.'}`);
+  } else if (acc.hasKitchen === false) {
+    if (acc.isException) {
+      reasoning.push(`No kitchen, but flagged as a deliberate exception: ${acc.exceptionReason ?? 'exceptional value.'}`);
+    } else {
+      reasoning.push('No kitchen — scores lower on the top priority.');
+    }
   } else {
-    reasoning.push('No kitchen — scores lower on the top priority.');
+    reasoning.push(
+      acc.kitchenRequirement === 'not-required'
+        ? 'Kitchen availability not yet confirmed, but not required for this stay.'
+        : 'Kitchen availability not yet confirmed — treated as unknown, not a "no."'
+    );
   }
 
   const walkScore =
@@ -264,11 +407,13 @@ export function scoreAccommodation(
       : 12; // neutral if unknown
   score += walkScore;
 
-  if (acc.hasParking) {
+  if (acc.hasParking === true) {
     score += 20;
     reasoning.push(`Has parking, saving an estimated ${trip.settings.avgParkingPerDay.toFixed(0)} EUR/night versus street/lot parking.`);
-  } else {
+  } else if (acc.hasParking === false) {
     reasoning.push('No on-site parking — factor in nightly parking cost separately.');
+  } else {
+    reasoning.push('Parking availability not yet confirmed.');
   }
 
   // Value: lower effective cost per night scores higher, normalized against a 120 EUR/night reference.
@@ -355,10 +500,6 @@ export function nextAction(trip: TripData): { label: string; detail: string } | 
   const urgent = trip.bookings.find((b) => b.status === 'need-booking');
   if (urgent) {
     return { label: `Book: ${urgent.label}`, detail: 'Marked as needing a booking.' };
-  }
-  const researching = trip.bookings.find((b) => b.status === 'researching');
-  if (researching) {
-    return { label: `Research: ${researching.label}`, detail: 'Still gathering options.' };
   }
   const needsOptimization = trip.accommodations.find((a) => a.needsOptimization);
   if (needsOptimization) {

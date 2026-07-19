@@ -55,12 +55,13 @@ export async function fetchTrip(tripId: string): Promise<TripData> {
   const accommodations: Accommodation[] = (accRes.data ?? []).map((a) => ({
     id: a.id, name: a.name, city: a.city, address: a.address ?? undefined,
     checkIn: a.check_in, checkOut: a.check_out, cost: Number(a.cost), paid: Number(a.paid),
+    kitchenRequirement: a.kitchen_requirement ?? 'required',
     hasKitchen: a.has_kitchen, hasParking: a.has_parking, hasBreakfast: a.has_breakfast,
     cancellationPolicy: a.cancellation_policy, bookingSource: a.booking_source ?? undefined,
     confirmationNumber: a.confirmation_number ?? undefined, reviewScore: a.review_score ?? undefined,
     nearestSupermarketWalkMin: a.nearest_supermarket_walk_min ?? undefined,
     nearestParkingWalkMin: a.nearest_parking_walk_min ?? undefined, notes: a.notes ?? undefined,
-    status: a.status, isException: a.is_exception, exceptionReason: a.exception_reason ?? undefined,
+    isException: a.is_exception, exceptionReason: a.exception_reason ?? undefined,
     needsOptimization: a.needs_optimization,
     location: a.lat != null && a.lng != null ? { name: a.city, lat: a.lat, lng: a.lng, mapsQuery: a.maps_query ?? undefined } : undefined,
   }));
@@ -73,18 +74,19 @@ export async function fetchTrip(tripId: string): Promise<TripData> {
 
   const transportScenarios: TransportScenario[] = (scenariosRes.data ?? []).map((s) => ({
     id: s.id, name: s.name, description: s.description ?? '',
-    lineItems: (lineItemsRes.data ?? []).filter((li) => li.scenario_id === s.id).map((li) => ({ label: li.label, amount: Number(li.amount) })),
+    lineItems: (lineItemsRes.data ?? []).filter((li) => li.scenario_id === s.id).map((li) => ({ id: li.id, label: li.label, amount: Number(li.amount) })),
     drivingTimeHrs: s.driving_time_hrs ?? undefined, distanceKm: s.distance_km ?? undefined,
     flexibilityScore: s.flexibility_score, convenienceScore: s.convenience_score,
     vehicleRequirement: s.vehicle_min_seats != null ? { minSeats: s.vehicle_min_seats, minLuggage: s.vehicle_min_luggage ?? 0, warning: s.vehicle_warning ?? undefined } : undefined,
     pros: (notesRes.data ?? []).filter((n) => n.scenario_id === s.id && n.kind === 'pro').map((n) => n.note),
     cons: (notesRes.data ?? []).filter((n) => n.scenario_id === s.id && n.kind === 'con').map((n) => n.note),
+    isSelected: s.is_selected,
   })).filter((s) => scenarioIds.has(s.id));
 
   const activities: Activity[] = (activitiesRes.data ?? []).map((a) => ({
     id: a.id, name: a.name, city: a.city, date: a.activity_date ?? undefined, time: a.activity_time ?? undefined,
-    status: a.status, costAdult: a.cost_adult ?? undefined, costYouth: a.cost_youth ?? undefined,
-    costSenior: a.cost_senior ?? undefined, totalCost: a.total_cost ?? undefined, paid: a.paid,
+    costAdult: a.cost_adult ?? undefined, costYouth: a.cost_youth ?? undefined,
+    costSenior: a.cost_senior ?? undefined, totalCost: a.total_cost ?? undefined,
     hasSeniorDiscount: a.has_senior_discount, hasYouthDiscount: a.has_youth_discount, notes: a.notes ?? undefined,
   }));
 
@@ -97,7 +99,13 @@ export async function fetchTrip(tripId: string): Promise<TripData> {
 
   const bookings: Booking[] = (bookingsRes.data ?? []).map((b) => ({
     id: b.id, label: b.label, category: b.category, status: b.status, cost: b.cost ?? undefined,
-    paidAmount: b.paid_amount ?? undefined, linkedEntityId: b.linked_entity_id ?? undefined,
+    paidAmount: b.paid_amount ?? undefined,
+    // 'booking' was a legacy/invalid value from before linked_entity_type had
+    // a real constraint -- normalize it away rather than propagate it.
+    linkedEntityType: b.linked_entity_type && b.linked_entity_type !== 'booking' ? b.linked_entity_type : undefined,
+    linkedEntityId: b.linked_entity_id ?? undefined,
+    reconciliationMode: b.reconciliation_mode,
+    reconciledAmount: b.reconciled_amount ?? undefined,
     date: b.booking_date ?? undefined, confirmationNumber: b.confirmation_number ?? undefined,
   }));
 
@@ -162,12 +170,37 @@ export async function upsertAccommodation(tripId: string, acc: Partial<Accommoda
   if (acc.name !== undefined) patch.name = acc.name;
   if (acc.cost !== undefined) patch.cost = acc.cost;
   if (acc.paid !== undefined) patch.paid = acc.paid;
-  if (acc.status !== undefined) patch.status = acc.status;
-  if (acc.hasKitchen !== undefined) patch.has_kitchen = acc.hasKitchen;
-  if (acc.hasParking !== undefined) patch.has_parking = acc.hasParking;
-  if (acc.hasBreakfast !== undefined) patch.has_breakfast = acc.hasBreakfast;
+  if (acc.checkIn !== undefined) patch.check_in = acc.checkIn;
+  if (acc.checkOut !== undefined) patch.check_out = acc.checkOut;
+  if (acc.kitchenRequirement !== undefined) patch.kitchen_requirement = acc.kitchenRequirement;
+  // These three are genuinely nullable ("unknown") -- use "in" rather than
+  // !== undefined so an explicit `null` (reverting back to unknown) is sent
+  // to Postgres instead of silently skipped.
+  if ('hasKitchen' in acc) patch.has_kitchen = acc.hasKitchen;
+  if ('hasParking' in acc) patch.has_parking = acc.hasParking;
+  if ('hasBreakfast' in acc) patch.has_breakfast = acc.hasBreakfast;
   const { error } = await supabase.from('accommodations').update(patch as never).eq('id', acc.id);
   await logWriteError('upsertAccommodation', error);
+}
+
+// Editing an accommodation's dates should relink itinerary days to match --
+// clear whoever pointed at this accommodation before, then link whichever
+// days fall inside the new [checkIn, checkOut) window.
+export async function syncAccommodationItinerary(tripId: string, accommodationId: string, checkIn: string, checkOut: string) {
+  const { error: clearErr } = await supabase
+    .from('itinerary_days')
+    .update({ accommodation_id: null })
+    .eq('trip_id', tripId)
+    .eq('accommodation_id', accommodationId);
+  await logWriteError('syncAccommodationItinerary:clear', clearErr);
+
+  const { error: linkErr } = await supabase
+    .from('itinerary_days')
+    .update({ accommodation_id: accommodationId })
+    .eq('trip_id', tripId)
+    .gte('date', checkIn)
+    .lt('date', checkOut);
+  await logWriteError('syncAccommodationItinerary:link', linkErr);
 }
 
 export async function upsertExpense(tripId: string, exp: Partial<Expense> & { id: string }) {
@@ -200,12 +233,10 @@ export async function upsertActivity(tripId: string, act: Partial<Activity> & { 
   if (act.city !== undefined) patch.city = act.city;
   if (act.date !== undefined) patch.activity_date = act.date;
   if (act.time !== undefined) patch.activity_time = act.time;
-  if (act.status !== undefined) patch.status = act.status;
   if (act.costAdult !== undefined) patch.cost_adult = act.costAdult;
   if (act.costYouth !== undefined) patch.cost_youth = act.costYouth;
   if (act.costSenior !== undefined) patch.cost_senior = act.costSenior;
   if (act.totalCost !== undefined) patch.total_cost = act.totalCost;
-  if (act.paid !== undefined) patch.paid = act.paid;
   if (act.hasSeniorDiscount !== undefined) patch.has_senior_discount = act.hasSeniorDiscount;
   if (act.hasYouthDiscount !== undefined) patch.has_youth_discount = act.hasYouthDiscount;
   if (act.notes !== undefined) patch.notes = act.notes;
@@ -220,7 +251,7 @@ export async function insertActivity(tripId: string, act: Activity) {
   // (Previously this passed the fake id straight through, which silently failed
   // every insert -- new activities appeared in the UI but were never persisted.)
   const { data, error } = await supabase.from('activities').insert({
-    trip_id: tripId, name: act.name, city: act.city, status: act.status, paid: act.paid,
+    trip_id: tripId, name: act.name, city: act.city,
     activity_date: act.date ?? null, activity_time: act.time ?? null,
     cost_adult: act.costAdult ?? null, cost_youth: act.costYouth ?? null, cost_senior: act.costSenior ?? null,
     total_cost: act.totalCost ?? null, notes: act.notes ?? null,
@@ -234,6 +265,17 @@ export async function deleteActivity(tripId: string, id: string) {
   await logWriteError('deleteActivity', error);
 }
 
+// accommodation/activity bookings must point at the item they book unless
+// explicitly unplanned (see bookings_linked_required_for_item). The caller
+// sets linkedEntityType explicitly now (needed for transport_scenario_line_item
+// and transport_leg links, which category alone can't tell apart) -- this is
+// just the fallback for the older accommodation/activity-only callers.
+function inferLinkedEntityType(booking: Pick<Booking, 'category' | 'linkedEntityType'>): Booking['linkedEntityType'] | null {
+  if (booking.linkedEntityType) return booking.linkedEntityType;
+  if (booking.category === 'accommodation' || booking.category === 'activity') return booking.category;
+  return null;
+}
+
 export async function insertBooking(tripId: string, booking: Booking) {
   // bookings.id is `uuid default gen_random_uuid()`, unlike booking.id (a client-side
   // `uid('bk')` string) -- let Postgres generate the real id and hand it back so the
@@ -242,6 +284,10 @@ export async function insertBooking(tripId: string, booking: Booking) {
     trip_id: tripId, label: booking.label, category: booking.category,
     status: booking.status, cost: booking.cost ?? null, booking_date: booking.date ?? null,
     confirmation_number: booking.confirmationNumber ?? null,
+    linked_entity_id: booking.linkedEntityId ?? null,
+    linked_entity_type: inferLinkedEntityType(booking),
+    reconciliation_mode: booking.reconciliationMode ?? (booking.linkedEntityId ? 'replace' : 'unplanned'),
+    reconciled_amount: booking.reconciledAmount ?? null,
   }).select('id').single();
   await logWriteError('insertBooking', error);
   return data?.id as string | undefined;
@@ -254,6 +300,15 @@ export async function upsertBooking(tripId: string, id: string, patch: Partial<B
   if (patch.paidAmount !== undefined) dbPatch.paid_amount = patch.paidAmount;
   if (patch.label !== undefined) dbPatch.label = patch.label;
   if (patch.category !== undefined) dbPatch.category = patch.category;
+  if (patch.category !== undefined || patch.linkedEntityType !== undefined) {
+    dbPatch.linked_entity_type = inferLinkedEntityType({
+      category: patch.category ?? 'other',
+      linkedEntityType: patch.linkedEntityType,
+    });
+  }
+  if (patch.linkedEntityId !== undefined) dbPatch.linked_entity_id = patch.linkedEntityId;
+  if (patch.reconciliationMode !== undefined) dbPatch.reconciliation_mode = patch.reconciliationMode;
+  if ('reconciledAmount' in patch) dbPatch.reconciled_amount = patch.reconciledAmount;
   if (patch.date !== undefined) dbPatch.booking_date = patch.date;
   if (patch.confirmationNumber !== undefined) dbPatch.confirmation_number = patch.confirmationNumber;
   const { error } = await supabase.from('bookings').update(dbPatch as never).eq('id', id).eq('trip_id', tripId);
@@ -308,6 +363,27 @@ export async function updateScenarioLineItems(scenarioId: string, lineItems: { l
     lineItems.map((li, i) => ({ scenario_id: scenarioId, label: li.label, amount: li.amount, sort_order: i }))
   );
   await logWriteError('updateScenarioLineItems:insert', error);
+  // Note: this delete-then-reinsert replaces every line item's id, so any
+  // booking linked to a specific line item of this scenario becomes orphaned
+  // the moment its line items are edited -- an inherent tradeoff of how line
+  // items already persist, not something this change introduces.
+}
+
+// Several scenarios can exist for comparison; only one may feed the working
+// budget at a time (radio-button semantics) -- never automatic.
+export async function selectTransportScenario(tripId: string, scenarioId: string) {
+  const { error: clearErr } = await supabase
+    .from('transport_scenarios')
+    .update({ is_selected: false })
+    .eq('trip_id', tripId)
+    .eq('is_selected', true);
+  await logWriteError('selectTransportScenario:clear', clearErr);
+
+  const { error: setErr } = await supabase
+    .from('transport_scenarios')
+    .update({ is_selected: true })
+    .eq('id', scenarioId);
+  await logWriteError('selectTransportScenario:set', setErr);
 }
 
 export async function togglePackingItem(tripId: string, id: string, checked: boolean) {
@@ -316,11 +392,17 @@ export async function togglePackingItem(tripId: string, id: string, checked: boo
 }
 
 export async function insertPackingItem(tripId: string, item: PackingItem) {
-  const { error } = await supabase.from('packing_items').insert({
-    id: item.id, trip_id: tripId, label: item.label, category: item.category,
+  // packing_items.id is `uuid default gen_random_uuid()`, unlike item.id (a
+  // client-side `uid('pk')` string) -- same bug already fixed for
+  // expenses/activities/bookings, never applied here. Was silently failing
+  // every insert (console-only error, item appears added then vanishes on
+  // refresh). Let Postgres generate the real id and hand it back.
+  const { data, error } = await supabase.from('packing_items').insert({
+    trip_id: tripId, label: item.label, category: item.category,
     traveller_id: item.travellerId ?? null, checked: item.checked,
-  });
+  }).select('id').single();
   await logWriteError('insertPackingItem', error);
+  return data?.id as string | undefined;
 }
 
 export async function deletePackingItem(tripId: string, id: string) {

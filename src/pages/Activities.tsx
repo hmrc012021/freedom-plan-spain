@@ -1,13 +1,11 @@
 import { useState } from 'react';
 import { AppShell } from '@/components/layout/AppShell';
-import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
-import { StatusBadge } from '@/components/ui/Badge';
+import { Card, CardHeader, CardTitle, StatusBadge } from '@freedom-plan/ui';
 import { useTripStore, useTrip } from '@/store/useTripStore';
+import { bookingsFor } from '@/lib/calculations';
 import { formatCurrency, formatDate, uid } from '@/lib/utils';
-import type { Activity, ActivityStatus } from '@/types/trip';
+import type { Activity } from '@/types/trip';
 import { Plus, Users, Pencil, Trash2, X, Check } from 'lucide-react';
-
-const STATUSES: ActivityStatus[] = ['booked', 'planned', 'idea', 'need-tickets', 'need-reservation', 'cancelled'];
 
 export default function Activities() {
   const trip = useTrip();
@@ -17,6 +15,10 @@ export default function Activities() {
   const [cityFilter, setCityFilter] = useState<'all' | string>('all');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
+
+  // No status field of its own -- an activity is a budget entry until a
+  // booking links to it, at which point that booking's status is effective.
+  const linkedBooking = (id: string) => bookingsFor(trip, id)[0];
 
   const cities = [...new Set(trip.activities.map((a) => a.city))];
   const filtered = trip.activities
@@ -107,22 +109,21 @@ export default function Activities() {
               </CardHeader>
 
               <div className="mb-3 flex items-center gap-2">
-                <select
-                  value={a.status}
-                  onChange={(e) => updateActivity(a.id, { status: e.target.value as ActivityStatus })}
-                  className="rounded-lg border border-petrol-100 dark:border-dark-border bg-transparent px-2 py-1 text-[12px]"
-                >
-                  {STATUSES.map((s) => (
-                    <option key={s} value={s}>{s.replace(/-/g, ' ')}</option>
-                  ))}
-                </select>
-                <StatusBadge status={a.status} />
+                {linkedBooking(a.id) ? (
+                  <StatusBadge status={linkedBooking(a.id)!.status} />
+                ) : (
+                  <span className="inline-flex items-center rounded-full border border-slate/20 px-2.5 py-0.5 text-[11px] font-medium text-slate">
+                    Not booked yet
+                  </span>
+                )}
               </div>
 
-              {a.totalCost != null && (
+              {(a.totalCost != null || linkedBooking(a.id)) && (
                 <div className="mb-2 flex items-center justify-between text-[13px]">
-                  <span className="text-slate">Total cost</span>
-                  <span className="font-mono-num text-ink dark:text-paper-dim">{formatCurrency(a.totalCost, trip.currency)}</span>
+                  <span className="text-slate">{linkedBooking(a.id) ? 'Total cost (booked)' : 'Total cost (estimate)'}</span>
+                  <span className="font-mono-num text-ink dark:text-paper-dim">
+                    {formatCurrency(linkedBooking(a.id)?.cost ?? a.totalCost ?? 0, trip.currency)}
+                  </span>
                 </div>
               )}
 
@@ -136,16 +137,6 @@ export default function Activities() {
               )}
 
               {a.notes && <p className="text-[12px] leading-relaxed text-slate">{a.notes}</p>}
-
-              <label className="mt-3 flex items-center gap-2 border-t border-petrol-100 dark:border-dark-border pt-3 text-[12.5px] text-ink-soft dark:text-paper-dim/80">
-                <input
-                  type="checkbox"
-                  checked={a.paid}
-                  onChange={(e) => updateActivity(a.id, { paid: e.target.checked })}
-                  className="accent-petrol-500"
-                />
-                Paid
-              </label>
             </Card>
           ),
         )}
@@ -323,8 +314,6 @@ function NewActivityForm({
               name: name.trim(),
               city: city.trim(),
               date: date || undefined,
-              status: 'idea',
-              paid: false,
               totalCost: totalCost.trim() === '' ? undefined : Number(totalCost),
             })
           }

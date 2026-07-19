@@ -76,6 +76,11 @@ export interface Location {
   mapsQuery?: string; // fallback for Google Maps link generation
 }
 
+// `true`/`false` are known facts; `null`/`undefined` means genuinely not
+// researched yet -- must never be treated as `false` ("no").
+export type AmenityAvailability = boolean | null;
+export type KitchenRequirement = 'required' | 'preferred' | 'not-required';
+
 export interface Accommodation {
   id: string;
   name: string;
@@ -85,9 +90,11 @@ export interface Accommodation {
   checkOut: string; // ISO date
   cost: number;
   paid: number;
-  hasKitchen: boolean;
-  hasParking: boolean;
-  hasBreakfast: boolean;
+  // What this stay needs, independent of what's actually known about it.
+  kitchenRequirement?: KitchenRequirement;
+  hasKitchen: AmenityAvailability;
+  hasParking: AmenityAvailability;
+  hasBreakfast: AmenityAvailability;
   cancellationPolicy: RefundPolicy;
   bookingSource?: string;
   confirmationNumber?: string;
@@ -95,7 +102,6 @@ export interface Accommodation {
   nearestSupermarketWalkMin?: number;
   nearestParkingWalkMin?: number;
   notes?: string;
-  status: PaymentStatus;
   location?: Location;
   isException?: boolean; // e.g. Granada: no kitchen, but value outstanding
   exceptionReason?: string;
@@ -125,6 +131,7 @@ export interface VehicleRequirement {
 }
 
 export interface ScenarioLineItem {
+  id?: string; // absent until the first save -- a booking can only link to a persisted line item
   label: string;
   amount: number;
 }
@@ -141,9 +148,10 @@ export interface TransportScenario {
   vehicleRequirement?: VehicleRequirement;
   pros: string[];
   cons: string[];
+  // Several scenarios can exist for comparison; only the explicitly selected
+  // one feeds the working budget. Never auto-selected from the recommendation.
+  isSelected?: boolean;
 }
-
-export type ActivityStatus = 'booked' | 'planned' | 'idea' | 'cancelled' | 'need-tickets' | 'need-reservation';
 
 export interface Activity {
   id: string;
@@ -151,27 +159,36 @@ export interface Activity {
   city: string;
   date?: string;
   time?: string;
-  status: ActivityStatus;
   costAdult?: number;
   costYouth?: number;
   costSenior?: number;
   totalCost?: number;
-  paid: boolean;
   hasSeniorDiscount?: boolean;
   hasYouthDiscount?: boolean;
   notes?: string;
 }
 
-export type BookingCategory = 'flight' | 'train' | 'accommodation' | 'activity' | 'car-rental' | 'other';
+export type BookingCategory = 'flight' | 'train' | 'bus' | 'accommodation' | 'activity' | 'car-rental' | 'food' | 'other';
+export type BookingStatus = 'need-booking' | 'reserved' | 'paid';
+export type LinkedEntityType = 'accommodation' | 'activity' | 'transport_leg' | 'transport_scenario_line_item';
+// A booking must say how it relates to whatever estimate it's linked to (if any):
+// - replace: fully substitutes the remaining estimate with this booking's real cost
+// - partial: consumes `reconciledAmount` of the estimate, the rest keeps forecasting
+// - additional: adds on top of the estimate, which keeps forecasting in full
+// - unplanned: no prior estimate at all -- a wholly new cost (booking has no link)
+export type BookingReconciliationMode = 'replace' | 'partial' | 'additional' | 'unplanned';
 
 export interface Booking {
   id: string;
   label: string;
   category: BookingCategory;
-  status: PaymentStatus | 'researching' | 'need-booking';
+  status: BookingStatus;
   cost?: number;
   paidAmount?: number;
+  linkedEntityType?: LinkedEntityType;
   linkedEntityId?: string;
+  reconciliationMode?: BookingReconciliationMode;
+  reconciledAmount?: number; // only meaningful when reconciliationMode === 'partial'
   date?: string;
   confirmationNumber?: string;
 }

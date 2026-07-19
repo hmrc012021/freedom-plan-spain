@@ -3,10 +3,8 @@ import {
   LayoutDashboard,
   MapPinned,
   Wallet,
-  BedDouble,
   Route,
   ClipboardCheck,
-  Ticket,
   Backpack,
   Settings as SettingsIcon,
   Plane,
@@ -15,14 +13,15 @@ import { cn } from '@/lib/utils';
 import { useTrip } from '@/store/useTripStore';
 import { daysUntilDeparture } from '@/lib/calculations';
 
+// Accommodation, Food, and Activities are budget-entry categories, not their
+// own top-level concerns -- reachable by tapping their box on the Budget
+// page instead of living in the nav (see Budget.tsx's CategoryBox links).
 const NAV_ITEMS = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/itinerary', label: 'Itinerary', icon: MapPinned },
   { to: '/budget', label: 'Budget', icon: Wallet },
-  { to: '/accommodation', label: 'Accommodation', icon: BedDouble },
   { to: '/transport', label: 'Transport', icon: Route },
   { to: '/bookings', label: 'Bookings', icon: ClipboardCheck },
-  { to: '/activities', label: 'Activities', icon: Ticket },
   { to: '/packing', label: 'Packing', icon: Backpack },
   { to: '/settings', label: 'Settings', icon: SettingsIcon },
 ];
@@ -70,12 +69,6 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
           </NavLink>
         ))}
       </nav>
-
-      <div className="px-5 pb-5 pt-3">
-        <div className="rounded-xl border border-dashed border-petrol-100 dark:border-dark-border px-3 py-2.5 text-[11px] leading-relaxed text-slate">
-          Everything here is stored locally in your browser. Export a backup anytime from Settings.
-        </div>
-      </div>
     </div>
   );
 }

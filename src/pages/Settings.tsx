@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { AppShell } from '@/components/layout/AppShell';
-import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
+import { Card, CardHeader, CardTitle } from '@freedom-plan/ui';
 import { useTripStore, useTrip } from '@/store/useTripStore';
 import { exportTripJSON, readTripJSONFile } from '@/lib/exportImport';
 import { ACCENT_PRESETS, applyAccent, getStoredAccentId } from '@/lib/accentPreference';

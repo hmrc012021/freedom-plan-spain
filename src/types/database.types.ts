@@ -3,11 +3,12 @@
 //   npx supabase gen types typescript --project-id ojwxetjlxqhjtltuycml --schema spain_travel_companion
 
 export type PaymentStatus = 'paid' | 'booked' | 'reserved' | 'estimated' | 'optional' | 'cancelled';
-export type BookingStatus = PaymentStatus | 'researching' | 'need-booking';
+export type BookingStatus = 'need-booking' | 'reserved' | 'paid';
 export type RefundPolicy = 'refundable' | 'non-refundable' | 'partial';
 export type TransportMode = 'flight' | 'train' | 'bus' | 'car' | 'walk' | 'taxi';
-export type ActivityStatus = 'booked' | 'planned' | 'idea' | 'cancelled' | 'need-tickets' | 'need-reservation';
-export type BookingCategory = 'flight' | 'train' | 'accommodation' | 'activity' | 'car-rental' | 'other';
+export type BookingCategory = 'flight' | 'train' | 'bus' | 'accommodation' | 'activity' | 'car-rental' | 'food' | 'other';
+export type KitchenRequirement = 'required' | 'preferred' | 'not-required';
+export type BookingReconciliationMode = 'replace' | 'partial' | 'additional' | 'unplanned';
 export type ExpenseCategory =
   | 'flights' | 'rail' | 'bus' | 'rental-car' | 'fuel' | 'parking' | 'tolls'
   | 'accommodation' | 'groceries' | 'restaurants' | 'coffee' | 'alcohol'
@@ -17,7 +18,7 @@ export type MealFrequency = 'daily' | 'occasional';
 export type PackingCategory = 'shared' | 'personal';
 export type ThemePreference = 'light' | 'dark' | 'system';
 export type ScenarioNoteKind = 'pro' | 'con';
-export type LinkedEntityType = 'accommodation' | 'activity' | 'transport_leg' | 'booking';
+export type LinkedEntityType = 'accommodation' | 'activity' | 'transport_leg' | 'transport_scenario_line_item' | 'booking';
 
 interface Row<T> { Row: T; Insert: Partial<T> & Record<string, unknown>; Update: Partial<T>; Relationships: [] }
 
@@ -74,9 +75,10 @@ export interface Database {
         check_out: string;
         cost: number;
         paid: number;
-        has_kitchen: boolean;
-        has_parking: boolean;
-        has_breakfast: boolean;
+        kitchen_requirement: KitchenRequirement;
+        has_kitchen: boolean | null;
+        has_parking: boolean | null;
+        has_breakfast: boolean | null;
         cancellation_policy: RefundPolicy;
         booking_source: string | null;
         confirmation_number: string | null;
@@ -84,7 +86,6 @@ export interface Database {
         nearest_supermarket_walk_min: number | null;
         nearest_parking_walk_min: number | null;
         notes: string | null;
-        status: PaymentStatus;
         is_exception: boolean;
         exception_reason: string | null;
         needs_optimization: boolean;
@@ -138,6 +139,7 @@ export interface Database {
         vehicle_min_luggage: number | null;
         vehicle_warning: string | null;
         sort_order: number;
+        is_selected: boolean;
         created_at: string;
       }>;
       transport_scenario_line_items: Row<{
@@ -161,12 +163,10 @@ export interface Database {
         city: string;
         activity_date: string | null;
         activity_time: string | null;
-        status: ActivityStatus;
         cost_adult: number | null;
         cost_youth: number | null;
         cost_senior: number | null;
         total_cost: number | null;
-        paid: boolean;
         has_senior_discount: boolean;
         has_youth_discount: boolean;
         notes: string | null;
@@ -183,6 +183,8 @@ export interface Database {
         paid_amount: number | null;
         linked_entity_type: LinkedEntityType | null;
         linked_entity_id: string | null;
+        reconciliation_mode: BookingReconciliationMode;
+        reconciled_amount: number | null;
         booking_date: string | null;
         confirmation_number: string | null;
         created_at: string;

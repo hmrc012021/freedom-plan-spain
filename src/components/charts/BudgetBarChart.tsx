@@ -56,28 +56,29 @@ export function BudgetBarChart({
               <span className="font-mono-num text-ink dark:text-paper-dim">
                 {formatCurrency(d.confirmedAmount, currency)}
                 <span className="text-slate"> / {formatCurrency(d.amount, currency)}</span>
+                <span className="text-slate"> · {d.amount > 0 ? Math.round((d.confirmedAmount / d.amount) * 100) : 0}%</span>
               </span>
             </div>
             <div className="space-y-1">
+              <div className="h-2 w-full overflow-hidden rounded-full bg-black/5 dark:bg-white/10">
+                <div className="h-full rounded-full" style={{ width: `${confirmedPct}%`, backgroundColor: color }} />
+              </div>
               <div className="h-2 w-full overflow-hidden rounded-full bg-black/5 dark:bg-white/10">
                 <div
                   className="h-full rounded-full"
                   style={{ width: `${totalPct}%`, backgroundColor: color, opacity: 0.3 }}
                 />
               </div>
-              <div className="h-2 w-full overflow-hidden rounded-full bg-black/5 dark:bg-white/10">
-                <div className="h-full rounded-full" style={{ width: `${confirmedPct}%`, backgroundColor: color }} />
-              </div>
             </div>
           </div>
         );
       })}
-      <div className="flex items-center gap-4 pt-1 text-[11px] text-slate">
-        <span className="flex items-center gap-1.5">
-          <span className="h-2 w-4 rounded-full bg-petrol-500 opacity-30" /> Estimated + confirmed
-        </span>
+      <div className="space-y-1 pt-1 text-[11px] text-slate">
         <span className="flex items-center gap-1.5">
           <span className="h-2 w-4 rounded-full bg-petrol-500" /> Confirmed only
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="h-2 w-4 rounded-full bg-petrol-500 opacity-30" /> Estimated + confirmed
         </span>
       </div>
       {notes?.filter((n): n is string => Boolean(n)).map((n, i) => (
