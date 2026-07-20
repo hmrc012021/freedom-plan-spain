@@ -3,9 +3,9 @@ import { AppShell } from '@/components/layout/AppShell';
 import { Card, StatusBadge } from '@freedom-plan/ui';
 import { useTrip, useTripStore } from '@/store/useTripStore';
 import { bookingsFor } from '@/lib/calculations';
-import { formatDateFull } from '@/lib/utils';
-import type { ItineraryDay } from '@/types/trip';
-import { Plane, TrainFront, Bus, Car, MapPin, Ticket, Pencil, Trash2, Plus, X, Check } from 'lucide-react';
+import { formatDateFull, uid } from '@/lib/utils';
+import type { ItineraryDay, ItineraryScheduleBlock, ItineraryBlockKind } from '@/types/trip';
+import { Plane, TrainFront, Bus, Car, MapPin, Ticket, Pencil, Trash2, Plus, X, Check, CalendarClock } from 'lucide-react';
 
 const modeIcon = {
   flight: Plane,
@@ -22,6 +22,7 @@ export default function Itinerary() {
   const removeItineraryDay = useTripStore((s) => s.removeItineraryDay);
   const addItineraryDay = useTripStore((s) => s.addItineraryDay);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
 
   return (
@@ -117,6 +118,17 @@ export default function Itinerary() {
                           })}
                         </div>
                       )}
+
+                      <div className="mt-3 border-t border-petrol-50 dark:border-dark-border/60 pt-2.5">
+                        <button
+                          onClick={() => setExpandedId(expandedId === day.id ? null : day.id)}
+                          className="flex items-center gap-1.5 text-[11.5px] font-medium text-petrol-500 hover:text-petrol-600"
+                        >
+                          <CalendarClock size={13} />
+                          {expandedId === day.id ? 'Hide day plan' : 'Day plan'}
+                        </button>
+                        {expandedId === day.id && <DayPlanView blocks={day.scheduleBlocks} />}
+                      </div>
                     </>
                   )}
                 </Card>
@@ -154,6 +166,100 @@ export default function Itinerary() {
   );
 }
 
+function DayPlanView({ blocks }: { blocks: ItineraryScheduleBlock[] }) {
+  const schedule = blocks.filter((b) => b.kind === 'schedule');
+  const tips = blocks.filter((b) => b.kind === 'tip');
+
+  if (schedule.length === 0 && tips.length === 0) {
+    return <p className="mt-2 text-[12.5px] text-slate">No plan written yet — click Edit to add one.</p>;
+  }
+
+  return (
+    <div className="mt-2.5 space-y-3">
+      {schedule.length > 0 && (
+        <ul className="space-y-1.5">
+          {schedule.map((b) => (
+            <li key={b.id} className="flex gap-2 text-[12.5px] leading-relaxed">
+              {b.time && <span className="shrink-0 font-mono-num text-petrol-500">{b.time}</span>}
+              <span>
+                <span className="text-ink-soft dark:text-paper-dim/80">{b.label}</span>
+                {b.detail && <span className="block text-slate">{b.detail}</span>}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {tips.length > 0 && (
+        <div>
+          <div className="mb-1 text-[10.5px] font-semibold uppercase tracking-wide text-slate">Tips</div>
+          <ul className="space-y-1.5">
+            {tips.map((b) => (
+              <li key={b.id} className="flex gap-2 text-[12.5px] leading-relaxed">
+                <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-petrol-500" />
+                <span>
+                  <span className="font-medium text-ink-soft dark:text-paper-dim/80">{b.label}</span>
+                  {b.detail && <span className="block text-slate">{b.detail}</span>}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ScheduleBlockRow({
+  block,
+  onChange,
+  onRemove,
+}: {
+  block: ItineraryScheduleBlock;
+  onChange: (patch: Partial<ItineraryScheduleBlock>) => void;
+  onRemove: () => void;
+}) {
+  return (
+    <div className="flex flex-col gap-1.5 rounded-lg border border-petrol-100 dark:border-dark-border p-2">
+      <div className="flex items-center gap-1.5">
+        <select
+          value={block.kind}
+          onChange={(e) => {
+            const kind = e.target.value as ItineraryBlockKind;
+            onChange({ kind, time: kind === 'tip' ? undefined : block.time });
+          }}
+          className="shrink-0 rounded-md border border-petrol-100 dark:border-dark-border bg-transparent px-1.5 py-1 text-[11px]"
+        >
+          <option value="schedule">Schedule</option>
+          <option value="tip">Tip</option>
+        </select>
+        {block.kind === 'schedule' && (
+          <input
+            type="time"
+            value={block.time ?? ''}
+            onChange={(e) => onChange({ time: e.target.value || undefined })}
+            className="shrink-0 rounded-md border border-petrol-100 dark:border-dark-border bg-transparent px-1.5 py-1 text-[11px]"
+          />
+        )}
+        <input
+          value={block.label}
+          onChange={(e) => onChange({ label: e.target.value })}
+          placeholder="Label"
+          className="min-w-[80px] flex-1 rounded-md border border-petrol-100 dark:border-dark-border bg-transparent px-1.5 py-1 text-[11px]"
+        />
+        <button onClick={onRemove} className="shrink-0 rounded-md p-1 text-slate hover:bg-brick-400/10 hover:text-brick-500" aria-label="Remove">
+          <X size={12} />
+        </button>
+      </div>
+      <input
+        value={block.detail ?? ''}
+        onChange={(e) => onChange({ detail: e.target.value || undefined })}
+        placeholder="Detail (optional)"
+        className="w-full rounded-md border border-petrol-100 dark:border-dark-border bg-transparent px-1.5 py-1 text-[11px]"
+      />
+    </div>
+  );
+}
+
 function DayEditor({
   day,
   onSave,
@@ -161,13 +267,24 @@ function DayEditor({
   onDelete,
 }: {
   day: ItineraryDay;
-  onSave: (patch: { date: string; city: string; notes?: string }) => void;
+  onSave: (patch: { date: string; city: string; notes?: string; scheduleBlocks: ItineraryScheduleBlock[] }) => void;
   onCancel: () => void;
   onDelete: () => void;
 }) {
   const [date, setDate] = useState(day.date);
   const [city, setCity] = useState(day.city);
   const [notes, setNotes] = useState(day.notes ?? '');
+  const [blocks, setBlocks] = useState<ItineraryScheduleBlock[]>(day.scheduleBlocks);
+
+  function updateBlock(id: string, patch: Partial<ItineraryScheduleBlock>) {
+    setBlocks((prev) => prev.map((b) => (b.id === id ? { ...b, ...patch } : b)));
+  }
+  function addBlock(kind: ItineraryBlockKind) {
+    setBlocks((prev) => [...prev, { id: uid('blk'), kind, label: '' }]);
+  }
+  function removeBlock(id: string) {
+    setBlocks((prev) => prev.filter((b) => b.id !== id));
+  }
 
   return (
     <div className="flex flex-col gap-2.5">
@@ -199,9 +316,36 @@ function DayEditor({
           className="mt-1 w-full rounded-lg border border-petrol-100 dark:border-dark-border bg-transparent px-2.5 py-1.5 text-[13px]"
         />
       </label>
+
+      <div className="flex flex-col gap-1.5">
+        <div className="text-[11px] text-slate">Day plan</div>
+        {blocks.map((b) => (
+          <ScheduleBlockRow key={b.id} block={b} onChange={(patch) => updateBlock(b.id, patch)} onRemove={() => removeBlock(b.id)} />
+        ))}
+        <div className="flex gap-2">
+          <button
+            onClick={() => addBlock('schedule')}
+            className="flex items-center gap-1 rounded-lg border border-petrol-100 dark:border-dark-border px-2.5 py-1 text-[11.5px] text-slate hover:bg-petrol-50 dark:hover:bg-dark-border"
+          >
+            <Plus size={12} /> Schedule item
+          </button>
+          <button
+            onClick={() => addBlock('tip')}
+            className="flex items-center gap-1 rounded-lg border border-petrol-100 dark:border-dark-border px-2.5 py-1 text-[11.5px] text-slate hover:bg-petrol-50 dark:hover:bg-dark-border"
+          >
+            <Plus size={12} /> Tip
+          </button>
+        </div>
+      </div>
+
       <div className="flex items-center gap-2">
         <button
-          onClick={() => onSave({ date, city, notes: notes.trim() || undefined })}
+          onClick={() =>
+            onSave({
+              date, city, notes: notes.trim() || undefined,
+              scheduleBlocks: blocks.filter((b) => b.label.trim() !== ''),
+            })
+          }
           className="flex items-center gap-1.5 rounded-lg bg-petrol-500 px-3 py-1.5 text-[12px] font-medium text-white hover:bg-petrol-600"
         >
           <Check size={13} /> Save

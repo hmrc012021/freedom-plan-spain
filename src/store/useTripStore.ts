@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type {
   TripData, Accommodation, Expense, Activity, Booking, TransportScenario,
-  PackingItem, MealAssumption, TripSettings, ItineraryDay,
+  PackingItem, MealAssumption, TripSettings, ItineraryDay, ItineraryScheduleBlock,
 } from '@/types/trip';
 import { TRIP_ID } from '@/lib/supabaseClient';
 import * as repo from '@/lib/tripRepository';
@@ -33,7 +33,7 @@ interface TripStore {
   addItineraryDay: (day: { date: string; city: string; notes?: string }) => void;
   updateItineraryDay: (
     id: string,
-    patch: { date?: string; city?: string; notes?: string; accommodationId?: string | null },
+    patch: { date?: string; city?: string; notes?: string; accommodationId?: string | null; scheduleBlocks?: ItineraryScheduleBlock[] },
   ) => void;
   removeItineraryDay: (id: string) => void;
 
@@ -214,7 +214,7 @@ export const useTripStore = create<TripStore>()((set, get) => ({
     const trip = get().trip;
     if (!trip) return;
     const tempId = uid('day');
-    const newDay: ItineraryDay = { id: tempId, date: day.date, city: day.city, notes: day.notes, transportLegIds: [], activityIds: [] };
+    const newDay: ItineraryDay = { id: tempId, date: day.date, city: day.city, notes: day.notes, transportLegIds: [], activityIds: [], scheduleBlocks: [] };
     set({ trip: { ...trip, itineraryDays: [...trip.itineraryDays, newDay].sort((a, b) => a.date.localeCompare(b.date)) } });
     void repo.insertItineraryDay(trip.id, day).then((realId) => {
       if (!realId) return;
@@ -237,6 +237,7 @@ export const useTripStore = create<TripStore>()((set, get) => ({
       },
     });
     void repo.updateItineraryDay(trip.id, id, patch);
+    if (patch.scheduleBlocks) void repo.updateItineraryScheduleBlocks(id, patch.scheduleBlocks);
     get().logEdit('Updated itinerary day');
   },
 

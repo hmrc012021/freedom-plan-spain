@@ -1,7 +1,7 @@
 import { supabase } from '@/lib/supabaseClient';
 import type {
   TripData, Accommodation, Expense, Activity, Booking, TransportScenario,
-  TransportLeg, ItineraryDay, PackingItem, MealAssumption, Traveller,
+  TransportLeg, ItineraryDay, ItineraryScheduleBlock, PackingItem, MealAssumption, Traveller,
 } from '@/types/trip';
 
 // ---------------------------------------------------------------------------
@@ -15,7 +15,7 @@ export async function fetchTrip(tripId: string): Promise<TripData> {
   const [
     tripRes, travellersRes, accRes, daysRes, legsRes, dayLegsRes,
     scenariosRes, lineItemsRes, notesRes, activitiesRes, dayActsRes,
-    bookingsRes, expensesRes, packingRes, mealsRes, checklistRes, editLogRes,
+    bookingsRes, expensesRes, packingRes, mealsRes, checklistRes, scheduleBlocksRes, editLogRes,
   ] = await Promise.all([
     supabase.from('trips').select('*').eq('id', tripId).single(),
     supabase.from('travellers').select('*').eq('trip_id', tripId).order('sort_order'),
@@ -33,6 +33,7 @@ export async function fetchTrip(tripId: string): Promise<TripData> {
     supabase.from('packing_items').select('*').eq('trip_id', tripId),
     supabase.from('meal_assumptions').select('*').eq('trip_id', tripId).order('sort_order'),
     supabase.from('itinerary_day_checklist_items').select('*').order('sort_order'),
+    supabase.from('itinerary_day_schedule_blocks').select('*').order('sort_order'),
     supabase.from('edit_log').select('*').eq('trip_id', tripId).order('created_at', { ascending: false }).limit(50),
   ]);
 
@@ -95,6 +96,9 @@ export async function fetchTrip(tripId: string): Promise<TripData> {
     transportLegIds: (dayLegsRes.data ?? []).filter((x) => x.day_id === d.id).map((x) => x.leg_id),
     activityIds: (dayActsRes.data ?? []).filter((x) => x.day_id === d.id).map((x) => x.activity_id),
     checklist: (checklistRes.data ?? []).filter((c) => c.day_id === d.id).map((c) => ({ id: c.id, label: c.label, done: c.done })),
+    scheduleBlocks: (scheduleBlocksRes.data ?? []).filter((b) => b.day_id === d.id).map((b) => ({
+      id: b.id, kind: b.kind, time: b.time ?? undefined, label: b.label, detail: b.detail ?? undefined,
+    })),
   }));
 
   const bookings: Booking[] = (bookingsRes.data ?? []).map((b) => ({
@@ -353,6 +357,18 @@ export async function updateItineraryDay(
 export async function deleteItineraryDay(tripId: string, id: string) {
   const { error } = await supabase.from('itinerary_days').delete().eq('id', id).eq('trip_id', tripId);
   await logWriteError('deleteItineraryDay', error);
+}
+
+export async function updateItineraryScheduleBlocks(dayId: string, blocks: ItineraryScheduleBlock[]) {
+  const { error: delErr } = await supabase.from('itinerary_day_schedule_blocks').delete().eq('day_id', dayId);
+  await logWriteError('updateItineraryScheduleBlocks:delete', delErr);
+  if (blocks.length === 0) return;
+  const { error } = await supabase.from('itinerary_day_schedule_blocks').insert(
+    blocks.map((b, i) => ({
+      day_id: dayId, kind: b.kind, time: b.time ?? null, label: b.label, detail: b.detail ?? null, sort_order: i,
+    })),
+  );
+  await logWriteError('updateItineraryScheduleBlocks:insert', error);
 }
 
 export async function updateScenarioLineItems(scenarioId: string, lineItems: { label: string; amount: number }[]) {

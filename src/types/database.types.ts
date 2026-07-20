@@ -19,6 +19,7 @@ export type PackingCategory = 'shared' | 'personal';
 export type ThemePreference = 'light' | 'dark' | 'system';
 export type ScenarioNoteKind = 'pro' | 'con';
 export type LinkedEntityType = 'accommodation' | 'activity' | 'transport_leg' | 'transport_scenario_line_item' | 'booking';
+export type ItineraryBlockKind = 'schedule' | 'tip';
 
 interface Row<T> { Row: T; Insert: Partial<T> & Record<string, unknown>; Update: Partial<T>; Relationships: [] }
 
@@ -108,6 +109,15 @@ export interface Database {
         day_id: string;
         label: string;
         done: boolean;
+        sort_order: number;
+      }>;
+      itinerary_day_schedule_blocks: Row<{
+        id: string;
+        day_id: string;
+        kind: ItineraryBlockKind;
+        time: string | null;
+        label: string;
+        detail: string | null;
         sort_order: number;
       }>;
       transport_legs: Row<{

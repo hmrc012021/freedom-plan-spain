@@ -204,6 +204,16 @@ export interface ItineraryStop {
   notes?: string;
 }
 
+export type ItineraryBlockKind = 'schedule' | 'tip';
+
+export interface ItineraryScheduleBlock {
+  id: string;
+  kind: ItineraryBlockKind;
+  time?: string;
+  label: string;
+  detail?: string;
+}
+
 export interface ItineraryDay {
   id: string;
   date: string; // ISO date
@@ -213,6 +223,7 @@ export interface ItineraryDay {
   activityIds: string[];
   notes?: string;
   checklist?: { id: string; label: string; done: boolean }[];
+  scheduleBlocks: ItineraryScheduleBlock[];
 }
 
 export interface PackingItem {
