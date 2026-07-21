@@ -177,6 +177,8 @@ export async function upsertAccommodation(tripId: string, acc: Partial<Accommoda
   if (acc.checkIn !== undefined) patch.check_in = acc.checkIn;
   if (acc.checkOut !== undefined) patch.check_out = acc.checkOut;
   if (acc.kitchenRequirement !== undefined) patch.kitchen_requirement = acc.kitchenRequirement;
+  if (acc.address !== undefined) patch.address = acc.address;
+  if (acc.notes !== undefined) patch.notes = acc.notes;
   // These three are genuinely nullable ("unknown") -- use "in" rather than
   // !== undefined so an explicit `null` (reverting back to unknown) is sent
   // to Postgres instead of silently skipped.

@@ -88,6 +88,7 @@ export default function Accommodation() {
                   <div className="mt-0.5 text-[12px] text-slate">
                     {acc.city} · {formatDate(acc.checkIn)} – {formatDate(acc.checkOut)} · {nights} nights
                   </div>
+                  {acc.address && <div className="mt-0.5 text-[11.5px] text-slate">{acc.address}</div>}
                 </div>
                 {displayBooking ? (
                   <StatusBadge status={displayBooking.status} />
@@ -248,6 +249,26 @@ export default function Accommodation() {
                   <AmenitySelect value={acc.hasBreakfast} onChange={(v) => updateAccommodation(acc.id, { hasBreakfast: v })} />
                 </label>
               </div>
+
+              <label className="mt-3 block text-[12px] text-slate">
+                Address
+                <input
+                  value={acc.address ?? ''}
+                  onChange={(e) => updateAccommodation(acc.id, { address: e.target.value || undefined })}
+                  placeholder="Street address"
+                  className="mt-0.5 w-full rounded-md border border-petrol-100 dark:border-dark-border bg-transparent px-2 py-1 text-[12.5px] text-ink dark:text-paper-dim"
+                />
+              </label>
+              <label className="mt-2 block text-[12px] text-slate">
+                Notes
+                <textarea
+                  value={acc.notes ?? ''}
+                  onChange={(e) => updateAccommodation(acc.id, { notes: e.target.value || undefined })}
+                  rows={3}
+                  placeholder="Confirmation details, nearby supermarket, directions, etc."
+                  className="mt-0.5 w-full rounded-md border border-petrol-100 dark:border-dark-border bg-transparent px-2 py-1 text-[12.5px] leading-relaxed text-ink dark:text-paper-dim"
+                />
+              </label>
             </Card>
           );
         })}
