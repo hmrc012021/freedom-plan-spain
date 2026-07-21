@@ -210,6 +210,7 @@ export default function Bookings() {
   const [confirmationNumber, setConfirmationNumber] = useState('');
   const [documentLink, setDocumentLink] = useState('');
   const [address, setAddress] = useState('');
+  const [notes, setNotes] = useState('');
   const [linkedEntityId, setLinkedEntityId] = useState('');
   const [reconciliationMode, setReconciliationMode] = useState<BookingReconciliationMode>('replace');
   const [reconciledAmount, setReconciledAmount] = useState('');
@@ -241,6 +242,7 @@ export default function Bookings() {
     setConfirmationNumber('');
     setDocumentLink('');
     setAddress('');
+    setNotes('');
     setLinkedEntityId('');
     setReconciliationMode('replace');
     setReconciledAmount('');
@@ -263,6 +265,7 @@ export default function Bookings() {
       confirmationNumber: confirmationNumber.trim() === '' ? undefined : confirmationNumber.trim(),
       documentLink: documentLink.trim() === '' ? undefined : documentLink.trim(),
       address: address.trim() === '' ? undefined : address.trim(),
+      notes: notes.trim() === '' ? undefined : notes.trim(),
       linkedEntityId: linkedEntityType ? linkedEntityId : undefined,
       linkedEntityType,
       reconciliationMode: mode,
@@ -397,6 +400,16 @@ export default function Bookings() {
                   className="mt-1 w-full rounded-lg border border-petrol-100 dark:border-dark-border bg-transparent px-2.5 py-1.5 text-[13px] text-ink dark:text-paper-dim outline-none focus:border-petrol-400"
                 />
               </label>
+              <label className="text-[12px] text-slate sm:col-span-2">
+                Notes (optional)
+                <textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  rows={2}
+                  placeholder="Neighborhood highlights, nearby supermarket, directions, etc."
+                  className="mt-1 w-full rounded-lg border border-petrol-100 dark:border-dark-border bg-transparent px-2.5 py-1.5 text-[13px] leading-relaxed text-ink dark:text-paper-dim outline-none focus:border-petrol-400"
+                />
+              </label>
             </div>
             <div className="flex items-center gap-2">
               <button
@@ -525,6 +538,7 @@ function BookingEditor({
   const [confirmationNumber, setConfirmationNumber] = useState(booking.confirmationNumber ?? '');
   const [documentLink, setDocumentLink] = useState(booking.documentLink ?? '');
   const [address, setAddress] = useState(booking.address ?? '');
+  const [notes, setNotes] = useState(booking.notes ?? '');
   const [linkedEntityId, setLinkedEntityId] = useState(booking.linkedEntityId ?? '');
   const [reconciliationMode, setReconciliationMode] = useState<BookingReconciliationMode>(
     booking.reconciliationMode ?? (booking.linkedEntityId ? 'replace' : 'unplanned'),
@@ -629,6 +643,16 @@ function BookingEditor({
             className="mt-1 w-full rounded-lg border border-petrol-100 dark:border-dark-border bg-transparent px-2.5 py-1.5 text-[13px]"
           />
         </label>
+        <label className="text-[11px] text-slate sm:col-span-2">
+          Notes
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            rows={2}
+            placeholder="Neighborhood highlights, nearby supermarket, directions, etc."
+            className="mt-1 w-full rounded-lg border border-petrol-100 dark:border-dark-border bg-transparent px-2.5 py-1.5 text-[13px] leading-relaxed"
+          />
+        </label>
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <button
@@ -644,6 +668,7 @@ function BookingEditor({
               confirmationNumber: confirmationNumber.trim() || undefined,
               documentLink: documentLink.trim() || undefined,
               address: address.trim() || undefined,
+              notes: notes.trim() || undefined,
               linkedEntityId: linkedEntityType ? linkedEntityId : undefined,
               linkedEntityType,
               reconciliationMode: mode,

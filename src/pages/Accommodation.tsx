@@ -250,13 +250,19 @@ export default function Accommodation() {
                 </label>
               </div>
 
+              {displayBooking?.notes && (
+                <div className="mt-3 rounded-md bg-petrol-50/60 dark:bg-dark-border/40 p-2 text-[12.5px] leading-relaxed text-ink-soft dark:text-paper-dim/80">
+                  <div className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-petrol-500">From the booking</div>
+                  {displayBooking.notes}
+                </div>
+              )}
               <label className="mt-3 block text-[12px] text-slate">
-                Notes
+                Planning notes
                 <textarea
                   value={acc.notes ?? ''}
                   onChange={(e) => updateAccommodation(acc.id, { notes: e.target.value || undefined })}
-                  rows={3}
-                  placeholder="Confirmation details, nearby supermarket, directions, etc."
+                  rows={2}
+                  placeholder="Requirements, trade-offs being considered, etc. -- neighborhood/confirmation details belong on the booking instead."
                   className="mt-0.5 w-full rounded-md border border-petrol-100 dark:border-dark-border bg-transparent px-2 py-1 text-[12.5px] leading-relaxed text-ink dark:text-paper-dim"
                 />
               </label>

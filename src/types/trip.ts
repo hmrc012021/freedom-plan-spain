@@ -194,6 +194,7 @@ export interface Booking {
   confirmationNumber?: string;
   documentLink?: string; // e.g. a Google Drive link to the confirmation PDF
   address?: string;
+  notes?: string; // real-world facts only known once booked -- neighborhood highlights, directions, etc.
 }
 
 export interface ItineraryStop {
