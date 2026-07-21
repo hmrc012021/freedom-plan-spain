@@ -193,13 +193,13 @@ function DayPlanView({ blocks }: { blocks: ItineraryScheduleBlock[] }) {
       )}
       {tips.length > 0 && (
         <div>
-          <div className="mb-1 text-[10.5px] font-semibold uppercase tracking-wide text-slate">Tips</div>
+          <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-petrol-500">Tips</div>
           <ul className="space-y-1.5">
             {tips.map((b) => (
               <li key={b.id} className="flex gap-2 text-[12.5px] leading-relaxed">
                 <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-petrol-500" />
                 <span>
-                  <span className="font-semibold uppercase tracking-wide text-petrol-500">{b.label}</span>
+                  <span className="text-[11px] font-semibold uppercase tracking-wide text-slate">{b.label}</span>
                   {b.detail && <span className="block text-slate">{b.detail}</span>}
                 </span>
               </li>
