@@ -177,14 +177,16 @@ function DayPlanView({ blocks }: { blocks: ItineraryScheduleBlock[] }) {
   return (
     <div className="mt-2.5 space-y-3">
       {schedule.length > 0 && (
-        <ul className="space-y-1.5">
+        <ul className="space-y-3">
           {schedule.map((b) => (
-            <li key={b.id} className="flex gap-2 text-[12.5px] leading-relaxed">
-              {b.time && <span className="shrink-0 font-mono-num text-petrol-500">{b.time}</span>}
-              <span>
-                <span className="text-ink-soft dark:text-paper-dim/80">{b.label}</span>
-                {b.detail && <span className="block text-slate">{b.detail}</span>}
-              </span>
+            <li key={b.id} className="text-[12.5px] leading-relaxed">
+              {b.time && (
+                <div className="font-mono-num text-[11px] font-semibold uppercase tracking-wide text-petrol-500">
+                  {b.time}
+                </div>
+              )}
+              <div className="text-ink-soft dark:text-paper-dim/80">{b.label}</div>
+              {b.detail && <div className="mt-0.5 text-slate">{b.detail}</div>}
             </li>
           ))}
         </ul>

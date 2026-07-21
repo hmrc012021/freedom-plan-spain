@@ -28,7 +28,7 @@ export function formatDate(iso: string): string {
 
 export function formatDateFull(iso: string): string {
   const d = new Date(iso + 'T00:00:00');
-  return new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'long', year: 'numeric' }).format(d);
+  return new Intl.DateTimeFormat('en-GB', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' }).format(d);
 }
 
 export function uid(prefix: string = 'id'): string {
