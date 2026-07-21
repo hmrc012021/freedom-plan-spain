@@ -5,7 +5,7 @@ import { useTripStore, useTrip } from '@/store/useTripStore';
 import { bookingCompletionPct } from '@/lib/calculations';
 import { formatDate, uid } from '@/lib/utils';
 import type { Booking, BookingCategory, Accommodation, Activity, TransportScenario, LinkedEntityType, BookingReconciliationMode } from '@/types/trip';
-import { Plane, TrainFront, BedDouble, Ticket, Car, Bus, UtensilsCrossed, MoreHorizontal, Plus, X, Pencil, Trash2, Check } from 'lucide-react';
+import { Plane, TrainFront, BedDouble, Ticket, Car, Bus, UtensilsCrossed, MoreHorizontal, Plus, X, Pencil, Trash2, Check, FileText } from 'lucide-react';
 
 const categoryIcon: Record<Booking['category'], typeof Plane> = {
   flight: Plane,
@@ -208,6 +208,7 @@ export default function Bookings() {
   const [status, setStatus] = useState<Booking['status']>('need-booking');
   const [date, setDate] = useState('');
   const [confirmationNumber, setConfirmationNumber] = useState('');
+  const [documentLink, setDocumentLink] = useState('');
   const [linkedEntityId, setLinkedEntityId] = useState('');
   const [reconciliationMode, setReconciliationMode] = useState<BookingReconciliationMode>('replace');
   const [reconciledAmount, setReconciledAmount] = useState('');
@@ -237,6 +238,7 @@ export default function Bookings() {
     setStatus('need-booking');
     setDate('');
     setConfirmationNumber('');
+    setDocumentLink('');
     setLinkedEntityId('');
     setReconciliationMode('replace');
     setReconciledAmount('');
@@ -257,6 +259,7 @@ export default function Bookings() {
       cost: cost.trim() === '' ? undefined : Number(cost),
       date: date.trim() === '' ? undefined : date,
       confirmationNumber: confirmationNumber.trim() === '' ? undefined : confirmationNumber.trim(),
+      documentLink: documentLink.trim() === '' ? undefined : documentLink.trim(),
       linkedEntityId: linkedEntityType ? linkedEntityId : undefined,
       linkedEntityType,
       reconciliationMode: mode,
@@ -373,6 +376,15 @@ export default function Bookings() {
                   className="mt-1 w-full rounded-lg border border-petrol-100 dark:border-dark-border bg-transparent px-2.5 py-1.5 text-[13px] text-ink dark:text-paper-dim outline-none focus:border-petrol-400"
                 />
               </label>
+              <label className="text-[12px] text-slate">
+                Document link (optional)
+                <input
+                  value={documentLink}
+                  onChange={(e) => setDocumentLink(e.target.value)}
+                  placeholder="e.g. Google Drive link to the PDF"
+                  className="mt-1 w-full rounded-lg border border-petrol-100 dark:border-dark-border bg-transparent px-2.5 py-1.5 text-[13px] text-ink dark:text-paper-dim outline-none focus:border-petrol-400"
+                />
+              </label>
             </div>
             <div className="flex items-center gap-2">
               <button
@@ -437,6 +449,11 @@ export default function Bookings() {
                         <div className="mt-0.5 flex items-center gap-2 text-[11.5px] text-slate">
                           {b.date && <span>{formatDate(b.date)}</span>}
                           {b.confirmationNumber && <span className="font-mono-num">{b.confirmationNumber}</span>}
+                          {b.documentLink && (
+                            <a href={b.documentLink} target="_blank" rel="noopener noreferrer" className="flex items-center gap-0.5 text-petrol-500 hover:underline">
+                              <FileText size={11} /> Document
+                            </a>
+                          )}
                         </div>
                       </div>
                       <span className="flex items-center justify-end gap-1 font-mono-num text-[13px] text-ink dark:text-paper-dim">
@@ -493,6 +510,7 @@ function BookingEditor({
   const [paidAmount, setPaidAmount] = useState(booking.paidAmount?.toString() ?? '');
   const [date, setDate] = useState(booking.date ?? '');
   const [confirmationNumber, setConfirmationNumber] = useState(booking.confirmationNumber ?? '');
+  const [documentLink, setDocumentLink] = useState(booking.documentLink ?? '');
   const [linkedEntityId, setLinkedEntityId] = useState(booking.linkedEntityId ?? '');
   const [reconciliationMode, setReconciliationMode] = useState<BookingReconciliationMode>(
     booking.reconciliationMode ?? (booking.linkedEntityId ? 'replace' : 'unplanned'),
@@ -580,6 +598,15 @@ function BookingEditor({
             className="mt-1 w-full rounded-lg border border-petrol-100 dark:border-dark-border bg-transparent px-2.5 py-1.5 text-[13px]"
           />
         </label>
+        <label className="text-[11px] text-slate">
+          Document link
+          <input
+            value={documentLink}
+            onChange={(e) => setDocumentLink(e.target.value)}
+            placeholder="e.g. Google Drive link to the PDF"
+            className="mt-1 w-full rounded-lg border border-petrol-100 dark:border-dark-border bg-transparent px-2.5 py-1.5 text-[13px]"
+          />
+        </label>
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <button
@@ -593,6 +620,7 @@ function BookingEditor({
               paidAmount: paidAmount.trim() === '' ? undefined : Number(paidAmount),
               date: date || undefined,
               confirmationNumber: confirmationNumber.trim() || undefined,
+              documentLink: documentLink.trim() || undefined,
               linkedEntityId: linkedEntityType ? linkedEntityId : undefined,
               linkedEntityType,
               reconciliationMode: mode,

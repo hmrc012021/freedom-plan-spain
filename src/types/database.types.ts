@@ -197,6 +197,7 @@ export interface Database {
         reconciled_amount: number | null;
         booking_date: string | null;
         confirmation_number: string | null;
+        document_link: string | null;
         created_at: string;
       }>;
       expenses: Row<{

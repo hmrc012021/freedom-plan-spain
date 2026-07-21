@@ -111,6 +111,7 @@ export async function fetchTrip(tripId: string): Promise<TripData> {
     reconciliationMode: b.reconciliation_mode,
     reconciledAmount: b.reconciled_amount ?? undefined,
     date: b.booking_date ?? undefined, confirmationNumber: b.confirmation_number ?? undefined,
+    documentLink: b.document_link ?? undefined,
   }));
 
   const expenses: Expense[] = (expensesRes.data ?? []).map((e) => ({
@@ -290,6 +291,7 @@ export async function insertBooking(tripId: string, booking: Booking) {
     trip_id: tripId, label: booking.label, category: booking.category,
     status: booking.status, cost: booking.cost ?? null, booking_date: booking.date ?? null,
     confirmation_number: booking.confirmationNumber ?? null,
+    document_link: booking.documentLink ?? null,
     linked_entity_id: booking.linkedEntityId ?? null,
     linked_entity_type: inferLinkedEntityType(booking),
     reconciliation_mode: booking.reconciliationMode ?? (booking.linkedEntityId ? 'replace' : 'unplanned'),
@@ -317,6 +319,7 @@ export async function upsertBooking(tripId: string, id: string, patch: Partial<B
   if ('reconciledAmount' in patch) dbPatch.reconciled_amount = patch.reconciledAmount;
   if (patch.date !== undefined) dbPatch.booking_date = patch.date;
   if (patch.confirmationNumber !== undefined) dbPatch.confirmation_number = patch.confirmationNumber;
+  if (patch.documentLink !== undefined) dbPatch.document_link = patch.documentLink;
   const { error } = await supabase.from('bookings').update(dbPatch as never).eq('id', id).eq('trip_id', tripId);
   await logWriteError('upsertBooking', error);
 }

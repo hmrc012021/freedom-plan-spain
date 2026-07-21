@@ -191,6 +191,7 @@ export interface Booking {
   reconciledAmount?: number; // only meaningful when reconciliationMode === 'partial'
   date?: string;
   confirmationNumber?: string;
+  documentLink?: string; // e.g. a Google Drive link to the confirmation PDF
 }
 
 export interface ItineraryStop {
