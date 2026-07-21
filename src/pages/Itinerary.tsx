@@ -199,7 +199,7 @@ function DayPlanView({ blocks }: { blocks: ItineraryScheduleBlock[] }) {
               <li key={b.id} className="flex gap-2 text-[12.5px] leading-relaxed">
                 <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-petrol-500" />
                 <span>
-                  <span className="font-medium text-ink-soft dark:text-paper-dim/80">{b.label}</span>
+                  <span className="font-semibold uppercase tracking-wide text-petrol-500">{b.label}</span>
                   {b.detail && <span className="block text-slate">{b.detail}</span>}
                 </span>
               </li>
