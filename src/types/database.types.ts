@@ -71,7 +71,6 @@ export interface Database {
         trip_id: string;
         name: string;
         city: string;
-        address: string | null;
         check_in: string;
         check_out: string;
         cost: number;

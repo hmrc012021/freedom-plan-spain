@@ -85,7 +85,8 @@ export interface Accommodation {
   id: string;
   name: string;
   city: string;
-  address?: string;
+  // No address of its own -- only firm once a real booking exists (see
+  // Booking.address), so it's derived from the linked booking, not stored here.
   checkIn: string; // ISO date
   checkOut: string; // ISO date
   cost: number;
