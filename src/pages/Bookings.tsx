@@ -209,6 +209,7 @@ export default function Bookings() {
   const [date, setDate] = useState('');
   const [confirmationNumber, setConfirmationNumber] = useState('');
   const [documentLink, setDocumentLink] = useState('');
+  const [address, setAddress] = useState('');
   const [linkedEntityId, setLinkedEntityId] = useState('');
   const [reconciliationMode, setReconciliationMode] = useState<BookingReconciliationMode>('replace');
   const [reconciledAmount, setReconciledAmount] = useState('');
@@ -239,6 +240,7 @@ export default function Bookings() {
     setDate('');
     setConfirmationNumber('');
     setDocumentLink('');
+    setAddress('');
     setLinkedEntityId('');
     setReconciliationMode('replace');
     setReconciledAmount('');
@@ -260,6 +262,7 @@ export default function Bookings() {
       date: date.trim() === '' ? undefined : date,
       confirmationNumber: confirmationNumber.trim() === '' ? undefined : confirmationNumber.trim(),
       documentLink: documentLink.trim() === '' ? undefined : documentLink.trim(),
+      address: address.trim() === '' ? undefined : address.trim(),
       linkedEntityId: linkedEntityType ? linkedEntityId : undefined,
       linkedEntityType,
       reconciliationMode: mode,
@@ -385,6 +388,15 @@ export default function Bookings() {
                   className="mt-1 w-full rounded-lg border border-petrol-100 dark:border-dark-border bg-transparent px-2.5 py-1.5 text-[13px] text-ink dark:text-paper-dim outline-none focus:border-petrol-400"
                 />
               </label>
+              <label className="text-[12px] text-slate">
+                Address (optional)
+                <input
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  placeholder="Street address"
+                  className="mt-1 w-full rounded-lg border border-petrol-100 dark:border-dark-border bg-transparent px-2.5 py-1.5 text-[13px] text-ink dark:text-paper-dim outline-none focus:border-petrol-400"
+                />
+              </label>
             </div>
             <div className="flex items-center gap-2">
               <button
@@ -446,6 +458,7 @@ export default function Bookings() {
                     >
                       <div>
                         <div className="text-[13px] font-medium text-ink dark:text-paper-dim">{b.label}</div>
+                        {b.address && <div className="mt-0.5 text-[11px] text-slate">{b.address}</div>}
                         <div className="mt-0.5 flex items-center gap-2 text-[11.5px] text-slate">
                           {b.date && <span>{formatDate(b.date)}</span>}
                           {b.confirmationNumber && <span className="font-mono-num">{b.confirmationNumber}</span>}
@@ -511,6 +524,7 @@ function BookingEditor({
   const [date, setDate] = useState(booking.date ?? '');
   const [confirmationNumber, setConfirmationNumber] = useState(booking.confirmationNumber ?? '');
   const [documentLink, setDocumentLink] = useState(booking.documentLink ?? '');
+  const [address, setAddress] = useState(booking.address ?? '');
   const [linkedEntityId, setLinkedEntityId] = useState(booking.linkedEntityId ?? '');
   const [reconciliationMode, setReconciliationMode] = useState<BookingReconciliationMode>(
     booking.reconciliationMode ?? (booking.linkedEntityId ? 'replace' : 'unplanned'),
@@ -607,6 +621,14 @@ function BookingEditor({
             className="mt-1 w-full rounded-lg border border-petrol-100 dark:border-dark-border bg-transparent px-2.5 py-1.5 text-[13px]"
           />
         </label>
+        <label className="text-[11px] text-slate">
+          Address
+          <input
+            value={address}
+            onChange={(e) => setAddress(e.target.value)}
+            className="mt-1 w-full rounded-lg border border-petrol-100 dark:border-dark-border bg-transparent px-2.5 py-1.5 text-[13px]"
+          />
+        </label>
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <button
@@ -621,6 +643,7 @@ function BookingEditor({
               date: date || undefined,
               confirmationNumber: confirmationNumber.trim() || undefined,
               documentLink: documentLink.trim() || undefined,
+              address: address.trim() || undefined,
               linkedEntityId: linkedEntityType ? linkedEntityId : undefined,
               linkedEntityType,
               reconciliationMode: mode,

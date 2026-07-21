@@ -192,6 +192,7 @@ export interface Booking {
   date?: string;
   confirmationNumber?: string;
   documentLink?: string; // e.g. a Google Drive link to the confirmation PDF
+  address?: string;
 }
 
 export interface ItineraryStop {

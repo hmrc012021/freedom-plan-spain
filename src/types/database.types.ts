@@ -198,6 +198,7 @@ export interface Database {
         booking_date: string | null;
         confirmation_number: string | null;
         document_link: string | null;
+        address: string | null;
         created_at: string;
       }>;
       expenses: Row<{
