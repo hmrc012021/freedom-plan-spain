@@ -20,6 +20,11 @@ export type ThemePreference = 'light' | 'dark' | 'system';
 export type ScenarioNoteKind = 'pro' | 'con';
 export type LinkedEntityType = 'accommodation' | 'activity' | 'transport_leg' | 'transport_scenario_line_item' | 'booking';
 export type ItineraryBlockKind = 'schedule' | 'tip';
+export type SchedulePriority = 'must_not_miss' | 'high' | 'normal' | 'optional' | 'cut_first';
+export type ScheduleAudience = 'all' | 'adults' | 'teens' | 'split';
+export type ScheduleFlexibility = 'fixed' | 'semi_fixed' | 'flexible';
+export type ScheduleItemStatus = 'planned' | 'booked' | 'paid' | 'completed' | 'cancelled';
+export type ScheduleOccasion = 'birthday' | 'special_meal' | 'celebration';
 
 interface Row<T> { Row: T; Insert: Partial<T> & Record<string, unknown>; Update: Partial<T>; Relationships: [] }
 
@@ -117,6 +122,12 @@ export interface Database {
         time: string | null;
         label: string;
         detail: string | null;
+        priority: SchedulePriority | null;
+        audience: ScheduleAudience;
+        flexibility: ScheduleFlexibility | null;
+        status: ScheduleItemStatus | null;
+        occasion: ScheduleOccasion | null;
+        hard_cutoff: string | null;
         sort_order: number;
       }>;
       transport_legs: Row<{

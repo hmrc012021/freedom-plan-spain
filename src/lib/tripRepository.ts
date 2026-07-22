@@ -98,6 +98,8 @@ export async function fetchTrip(tripId: string): Promise<TripData> {
     checklist: (checklistRes.data ?? []).filter((c) => c.day_id === d.id).map((c) => ({ id: c.id, label: c.label, done: c.done })),
     scheduleBlocks: (scheduleBlocksRes.data ?? []).filter((b) => b.day_id === d.id).map((b) => ({
       id: b.id, kind: b.kind, time: b.time ?? undefined, label: b.label, detail: b.detail ?? undefined,
+      priority: b.priority ?? undefined, audience: b.audience, flexibility: b.flexibility ?? undefined,
+      status: b.status ?? undefined, occasion: b.occasion ?? undefined, hardCutoff: b.hard_cutoff ?? undefined,
     })),
   }));
 
@@ -375,6 +377,8 @@ export async function updateItineraryScheduleBlocks(dayId: string, blocks: Itine
   const { error } = await supabase.from('itinerary_day_schedule_blocks').insert(
     blocks.map((b, i) => ({
       day_id: dayId, kind: b.kind, time: b.time ?? null, label: b.label, detail: b.detail ?? null, sort_order: i,
+      priority: b.priority ?? null, audience: b.audience ?? 'all', flexibility: b.flexibility ?? null,
+      status: b.status ?? null, occasion: b.occasion ?? null, hard_cutoff: b.hardCutoff ?? null,
     })),
   );
   await logWriteError('updateItineraryScheduleBlocks:insert', error);

@@ -3,8 +3,11 @@ import { AppShell } from '@/components/layout/AppShell';
 import { Card, StatusBadge } from '@freedom-plan/ui';
 import { useTrip, useTripStore } from '@/store/useTripStore';
 import { bookingsFor } from '@/lib/calculations';
-import { formatDateFull, uid } from '@/lib/utils';
-import type { ItineraryDay, ItineraryScheduleBlock, ItineraryBlockKind } from '@/types/trip';
+import { formatDateFull, uid, cn } from '@/lib/utils';
+import type {
+  ItineraryDay, ItineraryScheduleBlock, ItineraryBlockKind,
+  SchedulePriority, ScheduleAudience, ScheduleFlexibility, ScheduleItemStatus, ScheduleOccasion,
+} from '@/types/trip';
 import { Plane, TrainFront, Bus, Car, MapPin, Ticket, Pencil, Trash2, Plus, X, Check, CalendarClock } from 'lucide-react';
 
 const modeIcon = {
@@ -166,9 +169,30 @@ export default function Itinerary() {
   );
 }
 
+const PRIORITY_DOT: Record<SchedulePriority, string> = {
+  must_not_miss: 'bg-brick-500',
+  high: 'bg-petrol-500',
+  normal: 'bg-slate/40',
+  optional: 'bg-slate/40',
+  cut_first: 'bg-amber-400',
+};
+const AUDIENCE_LABEL: Record<ScheduleAudience, string> = {
+  all: 'All',
+  adults: 'Adults',
+  teens: 'Teens',
+  split: 'Split',
+};
+const OCCASION_ICON: Record<ScheduleOccasion, string> = {
+  birthday: '🎂',
+  special_meal: '🍽️',
+  celebration: '🎉',
+};
+
 function DayPlanView({ blocks }: { blocks: ItineraryScheduleBlock[] }) {
   const schedule = blocks.filter((b) => b.kind === 'schedule');
   const tips = blocks.filter((b) => b.kind === 'tip');
+  const mustNotMiss = schedule.filter((b) => b.priority === 'must_not_miss');
+  const cutFirst = schedule.filter((b) => b.priority === 'cut_first');
 
   if (schedule.length === 0 && tips.length === 0) {
     return <p className="mt-2 text-[12.5px] text-slate">No plan written yet — click Edit to add one.</p>;
@@ -176,17 +200,49 @@ function DayPlanView({ blocks }: { blocks: ItineraryScheduleBlock[] }) {
 
   return (
     <div className="mt-2.5 space-y-3">
+      {(mustNotMiss.length > 0 || cutFirst.length > 0) && (
+        <div className="space-y-1 rounded-lg bg-petrol-50/60 dark:bg-dark-border/40 p-2 text-[11.5px] leading-relaxed">
+          {mustNotMiss.length > 0 && (
+            <div>
+              <span className="font-semibold text-brick-500">Don't miss:</span>{' '}
+              <span className="text-ink-soft dark:text-paper-dim/80">{mustNotMiss.map((b) => b.label).join(', ')}</span>
+            </div>
+          )}
+          {cutFirst.length > 0 && (
+            <div>
+              <span className="font-semibold text-amber-500">Cut first if needed:</span>{' '}
+              <span className="text-ink-soft dark:text-paper-dim/80">{cutFirst.map((b) => b.label).join(', ')}</span>
+            </div>
+          )}
+        </div>
+      )}
       {schedule.length > 0 && (
         <ul className="space-y-3">
           {schedule.map((b) => (
-            <li key={b.id} className="text-[12.5px] leading-relaxed">
-              {b.time && (
-                <div className="font-mono-num text-[11px] font-semibold uppercase tracking-wide text-petrol-500">
-                  {b.time}
+            <li key={b.id} className="flex gap-2 text-[12.5px] leading-relaxed">
+              <span className={cn('mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full', PRIORITY_DOT[b.priority ?? 'normal'])} />
+              <div className="min-w-0 flex-1">
+                {b.time && (
+                  <div className="font-mono-num text-[11px] font-semibold uppercase tracking-wide text-petrol-500">
+                    {b.time}
+                  </div>
+                )}
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-ink-soft dark:text-paper-dim/80">
+                    {b.occasion && <span className="mr-1">{OCCASION_ICON[b.occasion]}</span>}
+                    {b.label}
+                  </span>
+                  {b.audience && b.audience !== 'all' && (
+                    <span className="rounded-full border border-petrol-100 dark:border-dark-border px-1.5 py-0 text-[9.5px] font-medium uppercase tracking-wide text-slate">
+                      {AUDIENCE_LABEL[b.audience]}
+                    </span>
+                  )}
                 </div>
-              )}
-              <div className="text-ink-soft dark:text-paper-dim/80">{b.label}</div>
-              {b.detail && <div className="mt-0.5 text-slate">{b.detail}</div>}
+                {b.detail && <div className="mt-0.5 text-slate">{b.detail}</div>}
+                {b.hardCutoff && (
+                  <div className="mt-0.5 text-[11px] font-semibold text-brick-500">Hard cutoff: {b.hardCutoff}</div>
+                )}
+              </div>
             </li>
           ))}
         </ul>
@@ -210,6 +266,12 @@ function DayPlanView({ blocks }: { blocks: ItineraryScheduleBlock[] }) {
     </div>
   );
 }
+
+const PRIORITY_OPTIONS: SchedulePriority[] = ['must_not_miss', 'high', 'normal', 'optional', 'cut_first'];
+const AUDIENCE_OPTIONS: ScheduleAudience[] = ['all', 'adults', 'teens', 'split'];
+const FLEXIBILITY_OPTIONS: ScheduleFlexibility[] = ['fixed', 'semi_fixed', 'flexible'];
+const STATUS_OPTIONS_META: ScheduleItemStatus[] = ['planned', 'booked', 'paid', 'completed', 'cancelled'];
+const OCCASION_OPTIONS: ScheduleOccasion[] = ['birthday', 'special_meal', 'celebration'];
 
 function ScheduleBlockRow({
   block,
@@ -258,6 +320,53 @@ function ScheduleBlockRow({
         placeholder="Detail (optional)"
         className="w-full rounded-md border border-petrol-100 dark:border-dark-border bg-transparent px-1.5 py-1 text-[11px]"
       />
+      <div className="flex flex-wrap gap-1.5">
+        <select
+          value={block.priority ?? ''}
+          onChange={(e) => onChange({ priority: (e.target.value || undefined) as SchedulePriority | undefined })}
+          className="rounded-md border border-petrol-100 dark:border-dark-border bg-transparent px-1.5 py-1 text-[10.5px] text-slate"
+        >
+          <option value="">Priority</option>
+          {PRIORITY_OPTIONS.map((p) => <option key={p} value={p}>{p.replace(/_/g, ' ')}</option>)}
+        </select>
+        <select
+          value={block.audience ?? 'all'}
+          onChange={(e) => onChange({ audience: e.target.value as ScheduleAudience })}
+          className="rounded-md border border-petrol-100 dark:border-dark-border bg-transparent px-1.5 py-1 text-[10.5px] text-slate"
+        >
+          {AUDIENCE_OPTIONS.map((a) => <option key={a} value={a}>{a}</option>)}
+        </select>
+        <select
+          value={block.flexibility ?? ''}
+          onChange={(e) => onChange({ flexibility: (e.target.value || undefined) as ScheduleFlexibility | undefined })}
+          className="rounded-md border border-petrol-100 dark:border-dark-border bg-transparent px-1.5 py-1 text-[10.5px] text-slate"
+        >
+          <option value="">Flexibility</option>
+          {FLEXIBILITY_OPTIONS.map((f) => <option key={f} value={f}>{f.replace(/_/g, ' ')}</option>)}
+        </select>
+        <select
+          value={block.status ?? ''}
+          onChange={(e) => onChange({ status: (e.target.value || undefined) as ScheduleItemStatus | undefined })}
+          className="rounded-md border border-petrol-100 dark:border-dark-border bg-transparent px-1.5 py-1 text-[10.5px] text-slate"
+        >
+          <option value="">Status</option>
+          {STATUS_OPTIONS_META.map((s) => <option key={s} value={s}>{s}</option>)}
+        </select>
+        <select
+          value={block.occasion ?? ''}
+          onChange={(e) => onChange({ occasion: (e.target.value || undefined) as ScheduleOccasion | undefined })}
+          className="rounded-md border border-petrol-100 dark:border-dark-border bg-transparent px-1.5 py-1 text-[10.5px] text-slate"
+        >
+          <option value="">Occasion</option>
+          {OCCASION_OPTIONS.map((o) => <option key={o} value={o}>{o.replace(/_/g, ' ')}</option>)}
+        </select>
+        <input
+          value={block.hardCutoff ?? ''}
+          onChange={(e) => onChange({ hardCutoff: e.target.value || undefined })}
+          placeholder="Hard cutoff"
+          className="w-24 rounded-md border border-petrol-100 dark:border-dark-border bg-transparent px-1.5 py-1 text-[10.5px]"
+        />
+      </div>
     </div>
   );
 }

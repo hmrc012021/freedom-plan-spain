@@ -209,6 +209,11 @@ export interface ItineraryStop {
 }
 
 export type ItineraryBlockKind = 'schedule' | 'tip';
+export type SchedulePriority = 'must_not_miss' | 'high' | 'normal' | 'optional' | 'cut_first';
+export type ScheduleAudience = 'all' | 'adults' | 'teens' | 'split';
+export type ScheduleFlexibility = 'fixed' | 'semi_fixed' | 'flexible';
+export type ScheduleItemStatus = 'planned' | 'booked' | 'paid' | 'completed' | 'cancelled';
+export type ScheduleOccasion = 'birthday' | 'special_meal' | 'celebration';
 
 export interface ItineraryScheduleBlock {
   id: string;
@@ -216,6 +221,12 @@ export interface ItineraryScheduleBlock {
   time?: string;
   label: string;
   detail?: string;
+  priority?: SchedulePriority;
+  audience?: ScheduleAudience;
+  flexibility?: ScheduleFlexibility;
+  status?: ScheduleItemStatus;
+  occasion?: ScheduleOccasion;
+  hardCutoff?: string;
 }
 
 export interface ItineraryDay {
